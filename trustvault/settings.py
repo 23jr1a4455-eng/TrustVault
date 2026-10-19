@@ -2,8 +2,8 @@
 
 import os
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlsplit
 
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -11,69 +11,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
+
+def env_list(name, default=""):
+    """Read a comma-separated environment variable into a clean list."""
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+DEBUG = os.getenv("DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise ImproperlyConfigured("Set SECRET_KEY in the environment or .env file.")
+if not DEBUG and (len(SECRET_KEY) < 50 or SECRET_KEY.startswith("django-insecure")):
+    raise ImproperlyConfigured("Use a long random SECRET_KEY when DEBUG is off.")
 
-DEBUG = os.getenv("DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
-]
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin.strip()
-]
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
-
-def database_config(database_url):
-    """Translate a SQLite or PostgreSQL URL into Django's database settings."""
-    parsed = urlsplit(database_url)
-
-    if parsed.scheme == "sqlite":
-        name = unquote(parsed.path)
-        if name == "/:memory:":
-            name = ":memory:"
-        elif name.startswith("/") and len(name) > 1 and name[2:3] == ":":
-            name = name[1:]
-        return {"ENGINE": "django.db.backends.sqlite3", "NAME": name}
-
-    if parsed.scheme in {"postgres", "postgresql"}:
-        options = {
-            key: values[-1]
-            for key, values in parse_qs(parsed.query).items()
-        }
-        config = {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": unquote(parsed.path.lstrip("/")),
-            "USER": unquote(parsed.username or ""),
-            "PASSWORD": unquote(parsed.password or ""),
-            "HOST": parsed.hostname or "",
-            "PORT": str(parsed.port or ""),
-        }
-        if options:
-            config["OPTIONS"] = options
-        return config
-
+# PostgreSQL only. The append-only audit protections and the row locks in the
+# plan need it, and a silent SQLite fallback would hide production problems.
+database_url = os.getenv("DATABASE_URL", "")
+if not database_url.startswith(("postgres://", "postgresql://")):
     raise ImproperlyConfigured(
-        "DATABASE_URL must use the sqlite, postgres, or postgresql scheme."
+        "Set DATABASE_URL to a PostgreSQL URL (postgres://user:pass@host:5432/db)."
     )
+DATABASES = {"default": dj_database_url.parse(database_url, conn_max_age=0)}
 
-
-database_url = os.getenv("DATABASE_URL")
-DATABASES = {
-    "default": database_config(database_url)
-    if database_url
-    else {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
-
+# The public Django admin app is not installed at all (not just unmounted).
 INSTALLED_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -86,6 +51,7 @@ AUTH_USER_MODEL = "vault.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -120,6 +86,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
@@ -135,16 +102,34 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# --- Sessions: stored on the server, so deleting a session row revokes access.
+# Identity only; document permissions are never kept in the session.
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_AGE = 60 * 60  # 1 hour idle timeout
+SESSION_SAVE_EVERY_REQUEST = True  # renew the timer on each request
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = not DEBUG
+
+# --- CSRF
+# HttpOnly means scripts cannot read the cookie; take the token from the page.
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = not DEBUG
+
+# --- HTTPS and headers
+# Trust X-Forwarded-Proto only because the host's proxy sets it and overwrites
+# any value a client sends. Confirm this in your host's documentation.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]  # lets host health checks use plain HTTP
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SECURE = not DEBUG
-SECURE_SSL_REDIRECT = not DEBUG
-SECURE_HSTS_SECONDS = 31_536_000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
+# Start short. Raise to a year only after HTTPS is confirmed to work everywhere.
+SECURE_HSTS_SECONDS = 3600 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
