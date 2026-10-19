@@ -82,6 +82,8 @@ INSTALLED_APPS = [
     "vault.apps.VaultConfig",
 ]
 
+AUTH_USER_MODEL = "vault.User"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

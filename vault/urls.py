@@ -1,3 +1,7 @@
-"""URL configuration for the vault app."""
+from django.urls import path
 
-urlpatterns = []
+from . import views
+
+urlpatterns = [
+    path("health/", views.health, name="health"),
+]
