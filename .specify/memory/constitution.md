@@ -1,50 +1,81 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+Version change: uninitialized template → 1.0.0
+Modified principles: none; the project-specific principles are established below.
+Added sections: Security Requirements; Development Workflow and Compliance.
+Removed sections: unresolved scaffold placeholders and template examples.
+Follow-up TODOs: confirm the original ratification date.
+-->
+
+# TrustVault Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Explicit Grants and Server-Side Authorization
+A document is reachable only by a user with an explicit grant. Every request
+that touches a document MUST authorize the requested action on the server
+using current grants from the database. The server MUST NOT rely on a prior
+request's decision.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Complete, Append-Only Audit
+Every authorization ALLOW and DENY MUST be recorded in the audit log before
+the server replies. The audit log MUST be append-only and tamper-evident;
+application code MUST NOT edit or delete existing audit events. This provides
+accountability and preserves trustworthy evidence of access decisions.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Immediate Revocation
+Revoking a document grant MUST prevent access on the next request. Authorization
+MUST read current database grants for every request and MUST NOT use cached
+grants or token permissions that can outlive revocation.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Deny by Default and Conceal Unreadable Documents
+Unknown users, roles, actions, grants, or document states MUST be denied.
+Requests for documents the user cannot read MUST return 404, not 403, so the
+response does not disclose whether a document exists.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Treat Upload Metadata as Untrusted
+The application MUST NOT trust an uploaded filename or content type. It MUST
+validate uploads using server-controlled rules and MUST use safe, generated
+storage names rather than using a client-supplied filename as a trusted path.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Authorization Changes Require Regression Tests
+Every authentication or authorization change MUST include a test that fails
+when the relevant authorization check is removed. Tests MUST cover the access
+decision and, where applicable, the audit event recorded before the response.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### VII. Tokens Carry No Permissions
+Authentication tokens MUST NOT contain document grants or other permissions.
+The server MUST obtain authorization grants from the database when deciding
+each request.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Security Requirements
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+All document access paths, including future routes, background operations, and
+administrative flows, MUST apply these principles consistently. Authorization
+MUST be action-specific, use current persisted grants, deny unknown states, and
+produce an auditable decision before returning a response. Audit records MUST
+not be updated or deleted by application behavior.
+
+## Development Workflow and Compliance
+
+Changes that add or modify document access, authentication, authorization,
+uploads, or audit behavior MUST include focused automated tests. Tests MUST
+verify denial as well as allowed access, 404 behavior for unreadable documents,
+and append-only audit behavior where relevant. Code review MUST check
+compliance with this constitution before changes are merged. Any proposed
+exception MUST be documented and approved through a constitution amendment
+before implementation.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution governs TrustVault design, implementation, tests, and
+reviews. Amendments require review and approval by project maintainers and
+MUST update this document's version and last-amended date. Versioning follows
+semantic versioning: a MAJOR increment marks incompatible governance changes,
+a MINOR increment adds or materially expands principles or requirements, and
+a PATCH increment clarifies wording without changing requirements. Every
+change that affects authentication or authorization MUST be reviewed for
+compliance and include a regression test that fails if its authorization check
+is removed.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: TODO(RATIFICATION_DATE): original adoption date unknown | **Last Amended**: 2026-10-19
