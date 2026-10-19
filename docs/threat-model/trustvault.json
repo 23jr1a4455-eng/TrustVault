@@ -307,8 +307,8 @@
                 "text": "Admin browser"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -405,16 +405,48 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "providesAuthentication": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "7c1c8670-4281-41a4-bd29-6de667be7b43",
+                  "title": "New STRIDE threat",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "weak password, no second factor",
+                  "mitigation": "every admin action is audited.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 14,
+                  "score": ""
+                },
+                {
+                  "id": "d2d10224-4b31-47d4-bb80-abd71ea30876",
+                  "title": "New STRIDE threat",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "Provide a description for this threat",
+                  "mitigation": "every admin action is audited.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 15,
+                  "score": ""
+                }
+              ],
+              "threatFrequency": {
+                "spoofing": 1,
+                "repudiation": 1
+              }
             }
           },
           {
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -435,15 +467,34 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": false,
               "isEncrypted": false,
               "isPublicNetwork": false,
               "protocol": "",
-              "threats": [],
+              "threats": [
+                {
+                  "id": "f5dd028d-f85f-4314-ac12-6c58545e3d01",
+                  "title": "New STRIDE threat",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "if the file stream is cached or shared",
+                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 17,
+                  "score": ""
+                }
+              ],
               "trustBoundaryIds": [
                 "33d4fc8e-dfde-44a5-8af4-2269bafcf12b"
-              ]
+              ],
+              "threatFrequency": {
+                "tampering": 0,
+                "informationDisclosure": 1,
+                "denialOfService": 0
+              }
             },
             "labels": [
               "bytes after allow"
@@ -783,16 +834,12 @@
             },
             "vertices": [
               {
-                "x": 360,
-                "y": 170
+                "x": -90,
+                "y": 190
               },
               {
-                "x": 360,
-                "y": 250
-              },
-              {
-                "x": 340,
-                "y": 270
+                "x": -70,
+                "y": 420
               }
             ]
           },
@@ -893,12 +940,12 @@
             },
             "vertices": [
               {
-                "x": -440,
-                "y": 750
+                "x": -300,
+                "y": 710
               },
               {
-                "x": -460,
-                "y": 660
+                "x": -300,
+                "y": 380
               }
             ]
           },
@@ -906,7 +953,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -927,16 +975,35 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": false,
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "",
-              "threats": [],
+              "threats": [
+                {
+                  "id": "e93d955e-b846-474f-989a-2e3ab93c8585",
+                  "title": "New STRIDE threat",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": ", if traffic ever runs over plain HTTP.",
+                  "mitigation": "Provide remediation for this threat or a reason if status is N/A",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 16,
+                  "score": ""
+                }
+              ],
               "trustBoundaryIds": [
                 "af64525f-664c-4efe-b779-578f0f2610e3",
                 "f9f2016e-eea9-4cc9-89f4-6527086323f7"
-              ]
+              ],
+              "threatFrequency": {
+                "tampering": 0,
+                "informationDisclosure": 1,
+                "denialOfService": 0
+              }
             },
             "labels": [
               "HTTPS requests"
@@ -1509,7 +1576,7 @@
             },
             "attrs": {
               "text": {
-                "text": "Ai suggestions"
+                "text": "AI suggestions"
               },
               "body": {
                 "stroke": "red",
@@ -1605,7 +1672,7 @@
             "id": "161e6492-1979-4324-bc74-d4c987beab86",
             "data": {
               "type": "tm.Process",
-              "name": "Ai suggestions",
+              "name": "AI suggestions",
               "description": "pending until confirmed",
               "outOfScope": false,
               "isTrustBoundary": false,
@@ -2222,13 +2289,6 @@
                 "informationDisclosure": 0,
                 "denialOfService": 0
               }
-            },
-            "tools": {
-              "items": [
-                "boundary",
-                "button-remove"
-              ],
-              "name": null
             }
           }
         ],
@@ -2237,6 +2297,6 @@
     ],
     "diagramTop": 3,
     "reviewer": "Shiva",
-    "threatTop": 13
+    "threatTop": 17
   }
 }
