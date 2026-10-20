@@ -1,0 +1,12 @@
+{% extends "vault/base.html" %}
+{% block title %}Sign in - TrustVault{% endblock %}
+{% block content %}
+<h1>Sign in</h1>
+{% if form.non_field_errors %}<p class="error">{{ form.non_field_errors.0 }}</p>{% endif %}
+<form method="post">{% csrf_token %}
+  <p><label>Username<br>{{ form.username }}</label></p>
+  <p><label>Password<br>{{ form.password }}</label></p>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button type="submit">Sign in</button>
+</form>
+{% endblock %}

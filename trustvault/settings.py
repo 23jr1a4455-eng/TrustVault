@@ -133,3 +133,13 @@ X_FRAME_OPTIONS = "DENY"
 # Start short. Raise to a year only after HTTPS is confirmed to work everywhere.
 SECURE_HSTS_SECONDS = 3600 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+
+# Add these lines at the bottom of trustvault/settings.py
+
+# --- Day 2: login and the authorisation gate
+# Never wrap whole requests in a transaction: the gate must commit its audit row
+# before it raises the 404, and a request-wide transaction would roll that row back.
+DATABASES["default"]["ATOMIC_REQUESTS"] = False
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "document_list"
+LOGOUT_REDIRECT_URL = "login"

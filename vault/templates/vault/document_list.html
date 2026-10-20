@@ -1,0 +1,20 @@
+{% extends "vault/base.html" %}
+{% block title %}Documents - TrustVault{% endblock %}
+{% block content %}
+<h1>Documents</h1>
+{% if documents %}
+<table>
+  <tr><th>Title</th><th>Category</th><th>Owner</th><th>Created</th></tr>
+  {% for doc in documents %}
+  <tr>
+    <td><a href="{% url 'document_detail' doc_id=doc.pk %}">{{ doc.title }}</a></td>
+    <td>{{ doc.category }}</td>
+    <td>{{ doc.owner.get_username }}</td>
+    <td>{{ doc.created_at|date:"Y-m-d" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No documents have been shared with you.</p>
+{% endif %}
+{% endblock %}

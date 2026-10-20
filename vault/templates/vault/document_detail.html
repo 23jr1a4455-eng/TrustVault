@@ -1,0 +1,20 @@
+{% extends "vault/base.html" %}
+{% block title %}{{ document.title }} - TrustVault{% endblock %}
+{% block content %}
+<p><a href="{% url 'document_list' %}">&larr; All documents</a></p>
+<h1>{{ document.title }}</h1>
+<p>Category: {{ document.category|default:"-" }} | Owner: {{ document.owner.get_username }}</p>
+{% if errors %}<p class="error">Please check the form and try again.</p>{% endif %}
+{% if can_edit %}
+<form method="post" action="{% url 'document_edit' doc_id=document.pk %}">{% csrf_token %}
+  <p><label>Title<br><input name="title" maxlength="200" value="{{ document.title }}" required></label></p>
+  <p><label>Category<br><input name="category" maxlength="100" value="{{ document.category }}"></label></p>
+  <button type="submit">Save</button>
+</form>
+{% endif %}
+{% if can_delete %}
+<form method="post" action="{% url 'document_delete' doc_id=document.pk %}">{% csrf_token %}
+  <button type="submit">Delete document</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TrustVault{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 50rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: .5rem; margin-bottom: 1.5rem; }
+    nav form { display: flex; gap: .75rem; align-items: center; margin: 0; }
+    .error { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #ddd; padding: .4rem; text-align: left; }
+    button { cursor: pointer; }
+  </style>
+</head>
+<body>
+<nav>
+  <a href="{% url 'home' %}"><strong>TrustVault</strong></a>
+  {% if user.is_authenticated %}
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+    <span>{{ user.get_username }} ({{ user.role }})</span>
+    <button type="submit">Log out</button>
+  </form>
+  {% endif %}
+</nav>
+{% block content %}{% endblock %}
+</body>
+</html>
