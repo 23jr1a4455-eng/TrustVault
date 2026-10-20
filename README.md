@@ -36,27 +36,29 @@ TrustVault is a secure, enterprise-grade document sharing and collaboration plat
    ```powershell
    python -m venv venv
    .\venv\Scripts\Activate.ps1
-Install dependencies:
+## Install dependencies:
 
-PowerShell
+## PowerShell
 pip install -r requirements.txt
 Run migrations and seed local database:
 
-PowerShell
+## PowerShell
 python manage.py migrate
 python manage.py seed
-Start the development server:
+## Start the development server:
 
-PowerShell
+## PowerShell
 python manage.py runserver
-Deploy
+## Deploy
 Deployed continuously to Render via GitHub integration using Gunicorn and WhiteNoise for static files.
 
-Build Command: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
+## Build Command:
+ pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
 
-Start Command: gunicorn config.wsgi
+## Start Command:
+ gunicorn config.wsgi
 
-Docs
+## Docs
 Architecture and Threat Modeling: docs/threat-model/
 
 Implementation plans, specs, and security checklists: specs/
