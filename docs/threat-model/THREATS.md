@@ -138,3 +138,9 @@ curl.exe -I https://trustvault-app-1tp1.onrender.com/admin/
 - The `/admin/` request returns 404.
 - Security headers appear on `/health/`.
 - GitHub shows secret scanning and push protection as on.
+
+Refused edits by someone who can read the document show “Not found”, not “Forbidden”. It’s one uniform behaviour, and the UI hides buttons the user can’t use.
+Audit rows are protected only in the model for now. Queryset updates and deletes still work until the database trigger on Day 5.
+Anonymous requests to document URLs are audited, so someone could flood the log. Rate limiting is on Day 5.
+Seed grants aren’t audited. Real grants go through the audited service on Day 4.
+Login throttling counters live in one server process. The client address is the last X-Forwarded-For entry, which is the one your host’s proxy adds.
