@@ -188,3 +188,9 @@ No constitution violations or unjustified architectural complexity.
 | FR-016: exclusions | No folder grants, public links, content search, or SSO routes |
 | FR-018: exclusive edits and expiry | PostgreSQL-backed edit lease and its web workflow |
 | SC-001–SC-009 | Permission, audit, upload, search, admin, AI, and PostgreSQL concurrency tests |
+
+
+- Roles live only in User.role. Single organisation. No companies, memberships or invitations.
+- Every refusal is a 404 (not 403). The denial audit row is committed BEFORE the 404 is raised.
+- ATOMIC_REQUESTS stays False so a request can never roll back its own audit row.
+- File storage decision (PostgreSQL vs bucket) is made on Day 3.
