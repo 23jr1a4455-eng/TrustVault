@@ -96,4 +96,16 @@ TrustVault rules for the AI agent
 - What was wrong: I copied it as ten plain rectangles, which Threat Dragon treats as Actors. Its own documentation limits Actors mostly to Spoofing and Repudiation, so I could not attach Tampering or Elevation of privilege to the gate or the audit log. I found this by reviewing a screenshot of my diagram.
 - What I did instead: redrew the four processes as Process shapes and four stores as Store shapes, kept the browsers as Actors, and kept the AI flows inside the App Server boundary.
 - Commit: docs-threat-model-update
+
 "@
+
+### 2026-10-19: Audit rollback could erase a refused request (audit integrity)
+
+- **Status:** Local test previously reported passing; CI status not yet confirmed.
+- **Asked:** Review the transaction boundary between authorization denial, audit recording, and the resulting 404.
+- **Problem identified:** If a denial audit event is written inside a transaction that is rolled back when the request raises `Http404`, the refused attempt may disappear from the audit trail.
+- **Test:** `test_denied_request_leaves_audit_row`.
+- **Drill E result:** Pending confirmation. Record the exact steps performed, the observed HTTP response, and whether the denial audit event remained persisted after the response.
+- **Second-model review:** Pending confirmation. Record the second model’s actual finding and whether it was independently verified against the code and test results.
+- **CI:** Pending confirmation.
+-- **Commit:** https://github.com/23jr1a4455-eng/TrustVault/commit/da2899e2d3504b1a5722cb879496ee381df9c8fc
