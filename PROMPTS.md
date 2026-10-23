@@ -108,4 +108,43 @@ TrustVault rules for the AI agent
 - **Drill E result:** Pending confirmation. Record the exact steps performed, the observed HTTP response, and whether the denial audit event remained persisted after the response.
 - **Second-model review:** Pending confirmation. Record the second model’s actual finding and whether it was independently verified against the code and test results.
 - **CI:** Pending confirmation.
--- **Commit:** https://github.com/23jr1a4455-eng/TrustVault/commit/da2899e2d3504b1a5722cb879496ee381df9c8fc
+- **Commit:** https://github.com/23jr1a4455-eng/TrustVault/commit/da2899e2d3504b1a5722cb879496ee381df9c8fc
+
+
+## Findings from security drills
+
+### Finding: Upload audit failure can leave a document stored
+
+- **Source:** Drill 6 — `test_no_audit_row_means_no_stored_document`
+- **Evidence:** The audit service raises `RuntimeError`, but the test finds that one document remains in the database.
+- **Impact:** A document may persist without the required audit record.
+- **Resolution:** Ensure document creation, file storage, and audit recording have appropriate transactional failure handling.
+- **Verification:** Rerun the regression test and the complete test suite.
+- **Status:** Open until verified.
+
+### Finding: File-integrity verification was missing or ineffective
+
+- **Source:** Drill 8 — `test_altered_file_bytes_are_detected`
+- **Evidence:** Altering the stored bytes did not raise the expected `RuntimeError`.
+- **Impact:** Modified file content could be served without detection.
+- **Resolution:** Store a cryptographic hash and verify the bytes on every download.
+- **Verification:** Confirm that the altered-bytes test passes and valid downloads still work.
+- **Status:** Open until verified.
+
+### Finding: Download route and view parameter mismatch
+
+- **Source:** Download-route regression drill
+- **Evidence:** `document_download()` raised `TypeError: unexpected keyword argument 'doc_id'`; nine download tests failed alongside the route-marker test.
+- **Impact:** The download endpoint failed, preventing its expected authorization and integrity behavior from being exercised.
+- **Resolution:** Align the URL parameter and view signature, and ensure the route has the required protection marker.
+- **Verification:** Run the complete download test module and route tests.
+- **Status:** Recheck against the current code.
+
+### Finding: Authentication test expectations differ from observed behavior
+
+- **Source:** Latest recorded test run
+- **Evidence:** Four tests expected HTTP 302 but received HTTP 404 for disabled or anonymous users.
+- **Impact:** The authentication and authorization contract is not consistently verified by the test suite.
+- **Resolution:** Determine the intended response for each case, preserve document-existence privacy, and update the guard or tests accordingly.
+- **Verification:** Rerun the affected tests and the full suite.
+- **Status:** Open pending investigation.
