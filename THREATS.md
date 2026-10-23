@@ -299,3 +299,10 @@ These findings came from security drills and remain open until the fixes are imp
 - **Drill 8 — altered file bytes are not detected.** Test: `test_altered_file_bytes_are_detected`. Altering stored bytes did not raise the expected `RuntimeError`. Store a cryptographic hash and verify file bytes on every download. Verify by rerunning the regression test and the full test suite.
 
 Do not change these findings to **Done** until the corresponding tests pass and the implementation has been reviewed.
+
+## Known Limitations
+
+- **ZIP archive checks:** ZIP checks use sizes declared in the archive. The server does not unpack the file.
+- **Antivirus:** No antivirus scanning is implemented in this release. This limitation is accepted.
+- **Missing content-length header:** A client that omits the length header could send a request body larger than 25 MB. Until Day 6, protection depends on the host and server request-size limits.
+- **Database file storage:** Uploaded files are stored in the database. A database backup or an administrator with sufficient database access can read their contents. Encryption at rest is not implemented in this release; this limitation is accepted.

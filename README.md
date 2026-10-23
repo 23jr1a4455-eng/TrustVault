@@ -62,3 +62,12 @@ Deployed continuously to Render via GitHub integration using Gunicorn and WhiteN
 Architecture and Threat Modeling: docs/threat-model/
 
 Implementation plans, specs, and security checklists: specs/
+
+## Database Storage
+
+- **Provider:** Render PostgreSQL
+- **Allocated storage limit:** 1 GB
+- **Storage usage at verification:** 6.59% (approximately 65.9 MB)
+- **Storage remaining at verification:** Approximately 934.1 MB
+
+TrustVault stores uploaded document file bytes in PostgreSQL. Uploaded files therefore contribute to database storage usage. Monitor database storage as the number and size of uploaded files increase.
