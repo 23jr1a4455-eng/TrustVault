@@ -35,6 +35,24 @@ class Document(models.Model):
         return self.title
 
 
+class DocumentFile(models.Model):
+    """The file bytes, kept in PostgreSQL in their own table.
+
+    The host's disk is wiped on every redeploy, and a separate table means listing
+    documents never loads file contents. Bytes are only ever served by the download
+    view, after the gate.
+    """
+
+    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name="file")
+    original_name = models.CharField(max_length=255)  # cleaned, display and download name only
+    content_type = models.CharField(max_length=100)  # decided by us from the file itself
+    size = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64)
+    data = models.BinaryField()
+    uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="uploaded_files")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+
 class GrantQuerySet(models.QuerySet):
     def active(self):
         """Grants that are not revoked and not expired, judged by the database clock now."""

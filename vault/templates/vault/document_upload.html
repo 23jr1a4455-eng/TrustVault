@@ -1,0 +1,14 @@
+{% extends "vault/base.html" %}
+{% block title %}Upload - TrustVault{% endblock %}
+{% block content %}
+<p><a href="{% url 'document_list' %}">&larr; All documents</a></p>
+<h1>Upload a document</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+  <p><label>Title (optional)<br><input name="title" maxlength="200"></label></p>
+  <p><label>Category (optional)<br><input name="category" maxlength="100"></label></p>
+  <p><label>File (PDF, DOCX, XLSX or PPTX, up to 25 MB)<br>
+     <input type="file" name="file" accept=".pdf,.docx,.xlsx,.pptx" required></label></p>
+  <button type="submit">Upload</button>
+</form>
+{% endblock %}

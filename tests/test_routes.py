@@ -21,9 +21,9 @@ def test_every_route_declares_how_it_is_protected():  # A-02
     unmarked = [
         route
         for route, view in all_routes()
-        if getattr(view, "access", None) not in {"public", "authenticated", "gated"}
+        if getattr(view, "access", None) not in {"public", "authenticated", "gated", "uploader"}
     ]
-    assert unmarked == [], f"Routes without public/authenticated/gated marker: {unmarked}"
+    assert unmarked == [], f"Routes without a protection marker: {unmarked}"
 
 
 def gated_routes():
@@ -54,3 +54,15 @@ def test_all_gated_routes_send_anonymous_users_to_login(letter, anon_client):
         assert response.status_code == 302, path
         assert "/login/" in response["Location"], path
     assert AuditEvent.objects.filter(document_id=letter.pk, allowed=False).count() >= 3
+
+
+def test_upload_routes_refuse_viewers_admins_and_anonymous(cast, client_for, anon_client):
+    routes = [route for route, view in all_routes() if getattr(view, "access", None) == "uploader"]
+    assert routes, "no upload route found"
+    for route in routes:
+        path = "/" + route
+        for person in (cast.ravi, cast.meena):
+            client = client_for(person)
+            for method in METHODS:
+                assert client.generic(method, path).status_code == 404, (person.username, method, path)
+        assert anon_client.get(path).status_code == 302

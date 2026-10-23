@@ -4,6 +4,10 @@
 <p><a href="{% url 'document_list' %}">&larr; All documents</a></p>
 <h1>{{ document.title }}</h1>
 <p>Category: {{ document.category|default:"-" }} | Owner: {{ document.owner.get_username }}</p>
+{% if stored_file %}
+<p>File: {{ stored_file.original_name }} ({{ stored_file.size|filesizeformat }})
+  &middot; <a href="{% url 'document_download' doc_id=document.pk %}">Download</a></p>
+{% else %}<p>No file has been uploaded for this document.</p>{% endif %}
 {% if errors %}<p class="error">Please check the form and try again.</p>{% endif %}
 {% if can_edit %}
 <form method="post" action="{% url 'document_edit' doc_id=document.pk %}">{% csrf_token %}

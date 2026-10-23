@@ -5,10 +5,10 @@ from django.http import Http404
 from vault.models import Document, Grant
 from vault.services import audit
 
-READ, EDIT, DELETE = "read", "edit", "delete"
+READ, DOWNLOAD, EDIT, DELETE = "read", "download", "edit", "delete"
 
 # Level needed for each action. An action that is not listed is denied.
-REQUIRED_LEVEL = {READ: 1, EDIT: 2, DELETE: 3}
+REQUIRED_LEVEL = {READ: 1, DOWNLOAD: 1, EDIT: 2, DELETE: 3}
 # Plain string keys on purpose; the database stores "read" / "edit".
 GRANT_LEVEL = {"read": 1, "edit": 2}
 OWNER_LEVEL = 3
@@ -50,14 +50,38 @@ def authorize(user, doc_id, action, request=None):
     document = Document.objects.filter(pk=doc_id).first()
     level = level_for(user, document)
     allowed = document is not None and level >= REQUIRED_LEVEL.get(action, NEVER)
+    detail = {"level": level}
+    if not getattr(user, "is_authenticated", False):
+        detail["reason"] = "anonymous"
     audit.record(
         actor=user,
         action=f"document.{action}",
         allowed=allowed,
         document_id=doc_id,
         request=request,
-        detail={"level": level},
+        detail=detail,
     )
     if not allowed:
         raise Http404  # same answer for "no such document" and "not yours"
     return document
+
+
+def authorize_upload(user, request=None):
+    """Gate for creating a new document. Only active users with the owner role may upload.
+
+    Admins and viewers are refused (and the refusal is audited), like any other denial.
+    """
+    allowed = (
+        getattr(user, "is_authenticated", False)
+        and user.is_active
+        and getattr(user, "role", "") == "owner"
+    )
+    audit.record(
+        actor=user,
+        action="document.upload",
+        allowed=allowed,
+        request=request,
+        detail={"role": getattr(user, "role", "")},
+    )
+    if not allowed:
+        raise Http404

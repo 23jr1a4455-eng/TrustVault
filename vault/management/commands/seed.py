@@ -3,7 +3,9 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
-from vault.models import Document, Grant
+from vault.models import Document, DocumentFile, Grant
+from vault.sample_files import demo_pdf
+from vault.services.uploads import inspect_upload
 
 DEMO_USERS = [
     ("meena", "admin"),
@@ -48,6 +50,13 @@ class Command(BaseCommand):
                 owner=owner, title=title, defaults={"category": category}
             )
             created_docs += int(created)
+            if not DocumentFile.objects.filter(document=document).exists():
+                data = demo_pdf(f"{title} - fake demo content")
+                info = inspect_upload(f"{title}.pdf", data)
+                DocumentFile.objects.create(
+                    document=document, original_name=info.safe_name, content_type=info.content_type,
+                    size=info.size, sha256=info.sha256, data=data, uploaded_by=owner,
+                )
             if grantee_name:
                 grantee = User.objects.get(username=grantee_name)
                 if not Grant.objects.active().filter(document=document, user=grantee).exists():

@@ -135,3 +135,11 @@ def test_list_shows_only_readable_documents(cast, letter, client_for):  # A-08 (
     for stranger in (cast.sunil, cast.anita, cast.meena):
         page = client_for(stranger).get(reverse("document_list")).content.decode()
         assert "Salary letter" not in page
+
+
+def test_anonymous_cannot_tell_existing_from_missing_documents(letter, anon_client):
+    missing_id = uuid.uuid4()
+    real = anon_client.get(url("document_detail", letter))
+    missing = anon_client.get(reverse("document_detail", kwargs={"doc_id": missing_id}))
+    assert real.status_code == missing.status_code == 302
+    assert real["Location"].replace(str(letter.pk), "ID") == missing["Location"].replace(str(missing_id), "ID")

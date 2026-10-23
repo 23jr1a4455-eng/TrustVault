@@ -2,6 +2,7 @@
 {% block title %}Documents - TrustVault{% endblock %}
 {% block content %}
 <h1>Documents</h1>
+{% if user.role == "owner" %}<p><a href="{% url 'document_upload' %}">Upload a document</a></p>{% endif %}
 {% if documents %}
 <table>
   <tr><th>Title</th><th>Category</th><th>Owner</th><th>Created</th></tr>
