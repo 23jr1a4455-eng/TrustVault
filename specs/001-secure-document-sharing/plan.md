@@ -194,3 +194,9 @@ No constitution violations or unjustified architectural complexity.
 - Every refusal is a 404 (not 403). The denial audit row is committed BEFORE the 404 is raised.
 - ATOMIC_REQUESTS stays False so a request can never roll back its own audit row.
 - File storage decision (PostgreSQL vs bucket) is made on Day 3.
+
+## Day 3 decisions
+
+- File bytes are stored in PostgreSQL (table `DocumentFile`), because the host's disk is wiped on redeploy.
+- Upload: owners only; PDF, DOCX, XLSX, PPTX; 25 MB limit; type decided from the file content.
+- Downloads: through the gate only, as attachments, never cached.
