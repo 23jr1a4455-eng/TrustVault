@@ -4,6 +4,7 @@ import hashlib
 
 from django.core.cache import cache
 
+from vault.services import audit
 from vault.services.audit import client_ip
 
 USER_LIMIT = 5  # failed attempts per username
@@ -33,3 +34,29 @@ def register_failure(request, username):
 
 def clear(request, username):
     cache.delete(_keys(request, username)[0])
+
+
+PROBE_LIMIT = 30
+PROBE_WINDOW = 10 * 60
+
+
+def probe_blocked(request):
+    """Throttle anonymous document probes and log one summary event per window."""
+    key = f"probe:{client_ip(request) or 'unknown'}"
+    cache.add(key, 0, PROBE_WINDOW)
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, PROBE_WINDOW)
+        count = 1
+    if count <= PROBE_LIMIT:
+        return False
+    if cache.add(key + ":logged", 1, PROBE_WINDOW):
+        audit.record(
+            actor=None,
+            action="auth.probe_throttled",
+            allowed=False,
+            request=request,
+            detail={"limit": PROBE_LIMIT},
+        )
+    return True

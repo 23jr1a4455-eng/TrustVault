@@ -1,0 +1,25 @@
+# Put this file at .github/workflows/security.yml
+# Runs on every push and every pull request. Not run by me; check the first run in the Actions tab.
+name: security
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - name: Python security lint (Bandit)
+        run: |
+          pip install bandit
+          bandit -r vault trustvault -x tests
+      - name: Known vulnerable dependencies (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+      - name: Static analysis (Semgrep)
+        run: |
+          pip install semgrep
+          semgrep scan --metrics=off --error --config p/django --config p/python --config p/secrets vault trustvault

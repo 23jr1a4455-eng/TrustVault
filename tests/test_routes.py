@@ -37,7 +37,12 @@ def test_the_inventory_actually_finds_the_gated_routes():
 
 def real_path(route, letter):
     grant = letter.grants.first()
-    path = "/" + route.replace("<uuid:doc_id>", str(letter.pk)).replace("<int:grant_id>", str(grant.pk))
+    path = (
+        "/"
+        + route.replace("<uuid:doc_id>", str(letter.pk))
+        .replace("<int:grant_id>", str(grant.pk))
+        .replace("<int:suggestion_id>", "1")
+    )
     assert "<" not in path, f"unfilled route parameter in {path}"  # a 404 here would be a false pass
     return path
 

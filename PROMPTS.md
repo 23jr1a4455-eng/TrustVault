@@ -38,6 +38,12 @@ TrustVault rules for the AI agent
 5. How are files kept unreachable without the gate?
 6. Does search filter by permission inside the query?
 
+### Standing security-review prompt
+Review the changed code against these rules and questions. Separate confirmed defects from conditional risks and false positives. For each confirmed defect, cite the exact code path, explain the preconditions and impact, and propose a focused regression test before changing code. Do not infer deployment configuration from source alone.
+
+### Standing remove-one-check drill
+For each critical authorization, audit, upload-validation, and integrity check, identify its protecting test. In a disposable test database, remove or weaken one check at a time, run the relevant test suite, confirm the test fails for the expected reason, and immediately restore the source file. Do not drill against a live database or discard unrelated worktree changes. If removing a check leaves the tests green, add a regression test before considering the invariant covered.
+
 ## Entries
 
 ### 2026-10-19: Scaffold left the public Django admin mounted (access control)
@@ -169,3 +175,11 @@ TrustVault rules for the AI agent
 - **Resolution:** Use a fixed append-only error message without a literal percent-format sequence in the SQL.
 - **Verification:** `test_the_database_itself_refuses_updates_and_deletes` exercises the installed trigger on PostgreSQL. The local PostgreSQL suite passes; GitHub CI passed on commit `77a4a44`, before the current uncommitted hardening changes.
 - **Lesson:** Run database-specific migration and trigger tests against the production database engine; SQLite success does not validate PostgreSQL-only SQL.
+
+### 2026-10-24: Day 6 review caught missing probe flags and route-test parameters
+
+- **Finding:** The Day 6 probe throttle wrote its one-per-window summary audit event, but the administrator flag query ignored that event. The new suggestion URLs also introduced a `suggestion_id` route parameter that the route-inventory test helper did not fill in.
+- **Impact:** Throttled anonymous probing would not be surfaced on the admin flags page, and route-authorization coverage would fail before reaching the authorization check.
+- **Resolution:** Added an admin flag for each throttled-probe summary and updated the route-test path builder to provide a valid suggestion id.
+- **Verification:** `test_anonymous_probing_is_slowed_down_and_logged_once` and the route tests validate these behaviors.
+- **Status:** Regression tests are being run locally; CI for Day 6 is pending.

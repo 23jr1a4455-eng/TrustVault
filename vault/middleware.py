@@ -5,6 +5,24 @@ from vault.authorization import EDIT, authorize, authorize_upload
 from vault.services import audit
 from vault.services import uploads
 
+CONTENT_SECURITY_POLICY = (
+    "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; "
+    "frame-ancestors 'none'; base-uri 'none'"
+)
+PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
+
+class SecurityHeadersMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.headers.setdefault("Permissions-Policy", PERMISSIONS_POLICY)
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        return response
+
 
 def _authorize_and_audit_oversized_upload(request, reason):
     try:

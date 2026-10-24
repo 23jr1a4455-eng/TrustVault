@@ -1,6 +1,8 @@
 import os
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from vault.models import Document, DocumentFile, Grant
@@ -31,6 +33,10 @@ class Command(BaseCommand):
         password = os.environ.get("SEED_PASSWORD")
         if not password:
             raise CommandError("Set SEED_PASSWORD in the environment or .env file.")
+        try:
+            validate_password(password)
+        except ValidationError as problem:
+            raise CommandError("SEED_PASSWORD is too weak: " + " ".join(problem.messages)) from problem
         User = get_user_model()
         created_users = 0
         for username, role in DEMO_USERS:
@@ -39,7 +45,7 @@ class Command(BaseCommand):
                 defaults={"role": role, "email": f"{username}@example.com"},
             )
             if created:
-                user.set_password(password)
+                user.set_password(password)  # nosemgrep: validated once above
                 user.save()
                 created_users += 1
 

@@ -72,6 +72,17 @@ def find_flags(now=None):
     flags += _bursts(failures, lambda e: e.detail.get("username") or _who(e), LOGIN_FAIL_BURST,
                      "Repeated failed sign-ins", "{count} failed or blocked sign-ins within {minutes} minutes")
 
+    for event in recent.filter(action="auth.probe_throttled", allowed=False):
+        flags.append(
+            Flag(
+                "Anonymous probing threshold reached",
+                _who(event),
+                1,
+                event.created_at,
+                "Anonymous document probes exceeded the per-address limit.",
+            )
+        )
+
     for event in AuditEvent.objects.filter(action="document.integrity_failure",
                                            created_at__gte=now - GRANT_LOOKBACK, created_at__lte=now):
         flags.append(Flag("A stored file failed its integrity check", _who(event), 1, event.created_at,

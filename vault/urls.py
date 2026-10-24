@@ -18,6 +18,17 @@ urlpatterns = [
     path("documents/<uuid:doc_id>/restore/", views.document_restore, name="document_restore"),
     path("documents/<uuid:doc_id>/access/", views.document_access, name="document_access"),
     path("documents/<uuid:doc_id>/access/grant/", views.document_grant, name="document_grant"),
+    path("documents/<uuid:doc_id>/access/suggest/", views.document_suggest, name="document_suggest"),
+    path(
+        "documents/<uuid:doc_id>/access/suggestions/<int:suggestion_id>/accept/",
+        views.document_suggestion_accept,
+        name="document_suggestion_accept",
+    ),
+    path(
+        "documents/<uuid:doc_id>/access/suggestions/<int:suggestion_id>/reject/",
+        views.document_suggestion_reject,
+        name="document_suggestion_reject",
+    ),
     path("documents/<uuid:doc_id>/access/<int:grant_id>/revoke/", views.document_revoke, name="document_revoke"),
     path("documents/<uuid:doc_id>/history/", views_admin.document_history, name="document_history"),
     path("activity/", views_admin.admin_activity, name="admin_activity"),

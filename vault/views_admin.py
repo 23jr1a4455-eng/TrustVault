@@ -20,6 +20,7 @@ GROUPS = {
     "denied": ("Refused attempts", Q(allowed=False)),
     "downloads": ("Downloads and uploads", Q(action__in=["document.download", "document.uploaded", "document.file_replaced"])),
     "auth": ("Sign-ins", Q(action__startswith="auth.")),
+    "assistant": ("Assistant suggestions and decisions", Q(action__startswith="ai.")),
     "admin": ("Administrator actions", Q(action__startswith="admin.") | Q(action__startswith="user.") | Q(action__startswith="audit.")),
 }
 

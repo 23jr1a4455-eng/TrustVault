@@ -18,6 +18,27 @@
   {% endfor %}
 </table>
 {% else %}<p>Nobody else has access.</p>{% endif %}
+<h2>Assistant suggestions</h2>
+<p>The assistant uses only document titles, categories and access to your other documents. It never reads file contents. <strong>Suggestions do not change access until you accept.</strong></p>
+<form method="post" action="{% url 'document_suggest' doc_id=document.pk %}">{% csrf_token %}<button type="submit">Ask for suggestions</button></form>
+{% if suggestions %}
+<table>
+  <tr><th>Person</th><th>Why</th><th>Level</th><th></th></tr>
+  {% for suggestion in suggestions %}
+  <tr>
+    <td>{{ suggestion.candidate.get_username }}</td>
+    <td>{{ suggestion.reason }}</td>
+    <td>
+      <form method="post" action="{% url 'document_suggestion_accept' doc_id=document.pk suggestion_id=suggestion.pk %}">{% csrf_token %}
+        <select name="level"><option value="read" selected>Read</option><option value="edit">Edit (includes read)</option></select>
+        <button type="submit">Accept</button>
+      </form>
+    </td>
+    <td><form method="post" action="{% url 'document_suggestion_reject' doc_id=document.pk suggestion_id=suggestion.pk %}">{% csrf_token %}<button type="submit">Dismiss</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
 <h2>Give access</h2>
 <form method="post" action="{% url 'document_grant' doc_id=document.pk %}">{% csrf_token %}
   <p><label>Username<br><input name="username" maxlength="150" required></label></p>

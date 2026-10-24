@@ -4,9 +4,10 @@ from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.utils.cache import add_never_cache_headers
 
+from vault import throttle
 from vault.authorization import authorize, authorize_admin, authorize_upload
 
 
@@ -79,6 +80,8 @@ def gated(action):
     def decorator(view):
         @wraps(view)
         def wrapper(request, doc_id, *args, **kwargs):
+            if not request.user.is_authenticated and throttle.probe_blocked(request):
+                return HttpResponse("Too many requests.", status=429)
             try:
                 document = authorize(request.user, doc_id, action, request=request)
             except Http404:

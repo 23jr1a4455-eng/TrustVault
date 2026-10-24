@@ -92,6 +92,36 @@ class Grant(models.Model):
         ]
 
 
+class Suggestion(models.Model):
+    """A pending recommendation; creating one does not change document access."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Dismissed"
+
+    document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="suggestions")
+    candidate = models.ForeignKey(User, on_delete=models.PROTECT, related_name="suggested_for")
+    level = models.CharField(max_length=4)
+    reason = models.CharField(max_length=200)
+    source = models.CharField(max_length=40)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    final_level = models.CharField(max_length=4, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "candidate"],
+                condition=Q(status="pending"),
+                name="one_pending_suggestion_per_person_and_document",
+            )
+        ]
+
+
 class AppendOnlyQuerySet(models.QuerySet):
     """Refuses bulk changes. The database trigger (PostgreSQL) is the second lock."""
 

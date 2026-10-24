@@ -112,6 +112,34 @@ def test_oversized_file_is_rejected(cast, client_for, monkeypatch):  # F-09
     assert rejected_reasons() == ["too_large"]
 
 
+def test_declared_oversized_multipart_is_rejected(cast, client_for, monkeypatch):
+    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 100)
+    monkeypatch.setattr("vault.services.uploads.MAX_MULTIPART_OVERHEAD_BYTES", 0)
+
+    response = upload(client_for(cast.priya), "large.pdf", pdf_bytes())
+
+    assert response.status_code == 413
+    assert Document.objects.count() == 0
+    assert rejected_reasons() == ["too_large"]
+
+
+def test_streaming_upload_handler_stops_after_file_limit(monkeypatch):
+    from types import SimpleNamespace
+
+    from django.core.files.uploadhandler import StopUpload
+
+    from vault.upload_handlers import UploadSizeLimitHandler
+
+    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 3)
+    request = SimpleNamespace()
+    handler = UploadSizeLimitHandler(request)
+
+    with pytest.raises(StopUpload):
+        handler.receive_data_chunk(b"four", 0)
+
+    assert request.upload_too_large is True
+
+
 def test_empty_file_is_rejected(cast, client_for):
     assert upload(client_for(cast.priya), "empty.pdf", b"").status_code == 400
 

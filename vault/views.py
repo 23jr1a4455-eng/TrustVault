@@ -13,9 +13,9 @@ from django.utils import timezone
 from vault import throttle
 from vault.authorization import DELETE, DOWNLOAD, EDIT, READ, RESTORE, SHARE, can
 from vault.guards import authenticated, gated, public, uploader
-from vault.models import Document, DocumentFile, Grant
+from vault.models import Document, DocumentFile, Grant, Suggestion
 from vault.selectors import readable_categories, search_documents
-from vault.services import audit, grants, uploads
+from vault.services import audit, grants, suggestions, uploads
 
 
 @public
@@ -330,7 +330,8 @@ class GrantForm(forms.Form):
 
 def _access_context(document, **extra):
     active = Grant.objects.active().filter(document=document).select_related("user").order_by("user__username")
-    return {"document": document, "grants": active, **extra}
+    pending = Suggestion.objects.filter(document=document, status="pending").select_related("candidate")
+    return {"document": document, "grants": active, "suggestions": pending, **extra}
 
 
 @gated(SHARE)
@@ -366,4 +367,48 @@ def document_revoke(request, document, grant_id):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     grants.revoke_access(document=document, grant_id=grant_id, by=request.user, request=request)
+    return redirect("document_access", doc_id=document.pk)
+
+
+@gated(SHARE)
+def document_suggest(request, document):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    suggestions.generate(document=document, by=request.user, request=request)
+    return redirect("document_access", doc_id=document.pk)
+
+
+@gated(SHARE)
+def document_suggestion_accept(request, document, suggestion_id):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    level = request.POST.get("level", "")
+    try:
+        suggestions.accept(
+            document=document,
+            suggestion_id=suggestion_id,
+            by=request.user,
+            level=level,
+            request=request,
+        )
+    except grants.GrantRefused as refused:
+        return render(
+            request,
+            "vault/document_access.html",
+            _access_context(document, error=refused.message),
+            status=400,
+        )
+    return redirect("document_access", doc_id=document.pk)
+
+
+@gated(SHARE)
+def document_suggestion_reject(request, document, suggestion_id):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    suggestions.reject(
+        document=document,
+        suggestion_id=suggestion_id,
+        by=request.user,
+        request=request,
+    )
     return redirect("document_access", doc_id=document.pk)
