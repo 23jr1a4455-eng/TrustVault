@@ -181,5 +181,20 @@ For each critical authorization, audit, upload-validation, and integrity check, 
 - **Finding:** The Day 6 probe throttle wrote its one-per-window summary audit event, but the administrator flag query ignored that event. The new suggestion URLs also introduced a `suggestion_id` route parameter that the route-inventory test helper did not fill in.
 - **Impact:** Throttled anonymous probing would not be surfaced on the admin flags page, and route-authorization coverage would fail before reaching the authorization check.
 - **Resolution:** Added an admin flag for each throttled-probe summary and updated the route-test path builder to provide a valid suggestion id.
-- **Verification:** `test_anonymous_probing_is_slowed_down_and_logged_once` and the route tests validate these behaviors.
-- **Status:** Regression tests are being run locally; CI for Day 6 is pending.
+- **Verification:** The focused hardening and route tests passed (61 tests), and the full local suite passed (199 tests) before the later 404-response regression was added.
+- **Status:** Fixed and verified locally; CI for Day 6 is pending.
+
+### 2026-10-24: Debug-mode 404 pages differed for forbidden and missing documents
+
+- **Finding:** With `DEBUG=True`, Django's detailed 404 body included request-specific details, so a forbidden document response did not match the response for an unknown document.
+- **Impact:** Debug-mode errors could expose implementation details and distinguish existing-but-forbidden documents from missing ones.
+- **Resolution:** Added middleware that replaces every 404 body with a generic plain-text response, and expanded the route regression test across ungranted roles and HTTP methods.
+- **Verification:** `test_404_responses_are_generic_and_match_for_unavailable_documents` and `test_all_gated_routes_deny_and_conceal_documents_for_every_method` pass; the full local suite passes (200 tests). CI is pending.
+
+### 2026-10-24: Day 6 mutation drill confirmed the regression tests detect removed checks
+
+- **Finding:** Each of the ten requested mutations was caught by its corresponding focused test: suggestion level, admin exclusion, document scoping, pending-only decisions, no-grant suggestion generation, probe throttling, security headers, no inline styles, owner-only suggestion access, and weak seed-password rejection.
+- **Impact:** The drill found no listed mutation that left its focused test green.
+- **Resolution:** Restored every mutation and reran the complete suite.
+- **Verification:** All ten mutation runs failed as expected; the restored worktree passes `pytest -q` (200 tests).
+- **Status:** Verified locally; CI is pending.

@@ -12,6 +12,19 @@ CONTENT_SECURITY_POLICY = (
 PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 
 
+class GenericNotFoundMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if response.status_code == 404:
+            response.content = b"Not found."
+            response.headers["Content-Type"] = "text/plain; charset=utf-8"
+            response.headers.pop("Content-Length", None)
+        return response
+
+
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

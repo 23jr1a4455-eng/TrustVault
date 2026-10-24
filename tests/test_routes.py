@@ -1,4 +1,7 @@
+import uuid
+
 import pytest
+from django.test import override_settings
 from django.urls import URLResolver, get_resolver, reverse
 
 from vault.models import AuditEvent
@@ -47,13 +50,20 @@ def real_path(route, letter):
     return path
 
 
-def test_all_gated_routes_deny_an_ungranted_user_for_every_method(cast, letter, client_for):  # A-07
-    client = client_for(cast.sunil)
-    for route in gated_routes():
-        path = real_path(route, letter)
-        for method in METHODS:
-            response = client.generic(method, path)
-            assert response.status_code == 404, f"{method} {path} returned {response.status_code}"
+@override_settings(DEBUG=True)
+def test_all_gated_routes_deny_and_conceal_documents_for_every_method(cast, letter, client_for):  # A-07
+    for person in (cast.sunil, cast.anita, cast.meena):
+        client = client_for(person)
+        for route in gated_routes():
+            path = real_path(route, letter)
+            missing = path.replace(str(letter.pk), str(uuid.uuid4()))
+            for method in METHODS:
+                response = client.generic(method, path)
+                absent = client.generic(method, missing)
+                assert response.status_code == 404, f"{method} {path} returned {response.status_code}"
+                assert response.content == absent.content, (
+                    f"{person.username}: {method} {path} differs from a missing document"
+                )
     letter.refresh_from_db()
     assert letter.deleted_at is None
     assert letter.title == "Salary letter - Ravi"
