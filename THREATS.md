@@ -301,7 +301,7 @@ Application ORM protections reject audit-row instance and queryset updates/delet
 
 Anonymous requests to document URLs are audited, so someone could flood the log. Rate limiting is on Day 5.
 
-Seed grants aren’t audited. Real grants go through the audited service on Day 4.
+Seed grants are not audited; real grants go through the audited service.
 
 Login throttling counters live in one server process. The client address is the last X-Forwarded-For entry, which is the one your host’s proxy adds.
 
@@ -327,3 +327,6 @@ the hardening changes; see [the successful workflow run](https://github.com/23jr
 - **Antivirus:** No antivirus scanning is implemented in this release. This limitation is accepted.
 - **Missing content-length header:** The upload handler enforces the per-file limit while parsing, but a client can still send a multipart request body larger than 25 MB without a length header. Total request size then relies on host and server limits until Day 6.
 - **Database file storage:** Uploaded files are stored in the database. A database backup or an administrator with sufficient database access can read their contents. Encryption at rest is not implemented in this release; this limitation is accepted.
+- **Search response differences:** Search results stay within the caller's permissions, but the caller can distinguish “no matches” from an invalid search. This is accepted.
+- **Owner usernames:** A viewer can see the username of the owner on documents they can already read. This is accepted because it helps viewers identify and contact the owner.
+- **Seed grants:** Seed grants are not audited. Real grants made through the application use the audited grant service.
