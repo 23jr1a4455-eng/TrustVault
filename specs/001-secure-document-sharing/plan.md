@@ -200,3 +200,12 @@ No constitution violations or unjustified architectural complexity.
 - File bytes are stored in PostgreSQL (table `DocumentFile`), because the host's disk is wiped on redeploy.
 - Upload: owners only; PDF, DOCX, XLSX, PPTX; 25 MB limit; type decided from the file content.
 - Downloads: through the gate only, as attachments, never cached.
+
+## Day 5 decisions
+
+- Audit rows form an HMAC hash chain; the key is an environment variable, not in the database.
+- A PostgreSQL trigger blocks UPDATE and DELETE on the audit table.
+- Rows written before the chain existed (Days 2 to 4) are counted but not chained.
+- Daily anchors are saved in `docs/anchors.log` (Git) as the outside witness.
+- Roles and new accounts are managed from the command line only, never from the website.
+- Admins cannot be disabled from the website.
