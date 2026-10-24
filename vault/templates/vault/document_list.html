@@ -2,11 +2,31 @@
 {% block title %}Documents - TrustVault{% endblock %}
 {% block content %}
 <h1>Documents</h1>
-{% if user.role == "owner" %}<p><a href="{% url 'document_upload' %}">Upload a document</a></p>{% endif %}
-{% if documents %}
+<p>
+  {% if user.role == "owner" %}<a href="{% url 'document_upload' %}">Upload a document</a> &middot; {% endif %}
+  <a href="{% url 'document_trash' %}">Deleted documents</a>
+</p>
+<form method="get">
+  <p>
+    <input name="q" placeholder="Name" value="{{ form.q.value|default:'' }}" maxlength="100">
+    <input name="owner" placeholder="Owner" value="{{ form.owner.value|default:'' }}" maxlength="150">
+    <select name="category">
+      <option value="">Any category</option>
+      {% for name in categories %}<option value="{{ name }}"{% if form.category.value == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </p>
+  <p>
+    <label>From <input type="date" name="date_from" value="{{ form.date_from.value|default:'' }}"></label>
+    <label>To <input type="date" name="date_to" value="{{ form.date_to.value|default:'' }}"></label>
+    <button type="submit">Search</button> <a href="{% url 'document_list' %}">Clear</a>
+  </p>
+</form>
+{% if form_invalid %}<p class="error">Please check your search and try again.</p>{% endif %}
+<p>{{ total }} document{{ total|pluralize }} found</p>
+{% if page.object_list %}
 <table>
   <tr><th>Title</th><th>Category</th><th>Owner</th><th>Created</th></tr>
-  {% for doc in documents %}
+  {% for doc in page.object_list %}
   <tr>
     <td><a href="{% url 'document_detail' doc_id=doc.pk %}">{{ doc.title }}</a></td>
     <td>{{ doc.category }}</td>
@@ -15,7 +35,12 @@
   </tr>
   {% endfor %}
 </table>
+<p>
+  {% if page.has_previous %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.previous_page_number }}">&larr; Previous</a>{% endif %}
+  Page {{ page.number }} of {{ page.paginator.num_pages }}
+  {% if page.has_next %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.next_page_number }}">Next &rarr;</a>{% endif %}
+</p>
 {% else %}
-<p>No documents have been shared with you.</p>
+<p>No documents match.</p>
 {% endif %}
 {% endblock %}

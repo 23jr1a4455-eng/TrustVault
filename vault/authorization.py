@@ -6,16 +6,17 @@ from vault.models import Document, Grant
 from vault.services import audit
 
 READ, DOWNLOAD, EDIT, DELETE = "read", "download", "edit", "delete"
+SHARE, RESTORE = "share", "restore"  # owner only: manage who has access / undelete
 
 # Level needed for each action. An action that is not listed is denied.
-REQUIRED_LEVEL = {READ: 1, DOWNLOAD: 1, EDIT: 2, DELETE: 3}
+REQUIRED_LEVEL = {READ: 1, DOWNLOAD: 1, EDIT: 2, DELETE: 3, SHARE: 3, RESTORE: 3}
 # Plain string keys on purpose; the database stores "read" / "edit".
 GRANT_LEVEL = {"read": 1, "edit": 2}
 OWNER_LEVEL = 3
 NEVER = 99
 
 
-def level_for(user, document):
+def level_for(user, document, include_deleted=False):
     """The user's access level on the document right now, read fresh from the database.
 
     0 = none, 1 = read, 2 = edit, 3 = owner. Admins get nothing special.
@@ -24,7 +25,7 @@ def level_for(user, document):
         return 0
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return 0
-    if document.deleted_at is not None:
+    if document.deleted_at is not None and not include_deleted:
         return 0
     if document.owner_id == user.pk:
         return OWNER_LEVEL
@@ -48,7 +49,7 @@ def authorize(user, doc_id, action, request=None):
     this inside a transaction.atomic() block.
     """
     document = Document.objects.filter(pk=doc_id).first()
-    level = level_for(user, document)
+    level = level_for(user, document, include_deleted=(action == RESTORE))
     allowed = document is not None and level >= REQUIRED_LEVEL.get(action, NEVER)
     detail = {"level": level}
     if not getattr(user, "is_authenticated", False):

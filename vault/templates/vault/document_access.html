@@ -1,0 +1,28 @@
+{% extends "vault/base.html" %}
+{% block title %}Access - {{ document.title }} - TrustVault{% endblock %}
+{% block content %}
+<p><a href="{% url 'document_detail' doc_id=document.pk %}">&larr; {{ document.title }}</a></p>
+<h1>Who has access</h1>
+<p>You are the owner and always have full access.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if grants %}
+<table>
+  <tr><th>Person</th><th>Level</th><th>Expires</th><th></th></tr>
+  {% for grant in grants %}
+  <tr>
+    <td>{{ grant.user.get_username }}</td>
+    <td>{{ grant.get_level_display }}</td>
+    <td>{{ grant.expires_at|date:"Y-m-d"|default:"never" }}</td>
+    <td><form method="post" action="{% url 'document_revoke' doc_id=document.pk grant_id=grant.pk %}">{% csrf_token %}<button type="submit">Take back</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p>Nobody else has access.</p>{% endif %}
+<h2>Give access</h2>
+<form method="post" action="{% url 'document_grant' doc_id=document.pk %}">{% csrf_token %}
+  <p><label>Username<br><input name="username" maxlength="150" required></label></p>
+  <p><label>Level<br><select name="level"><option value="read">Read</option><option value="edit">Edit (includes read)</option></select></label></p>
+  <p><label>Expires on (optional)<br><input type="date" name="expires_on"></label></p>
+  <button type="submit">Give access</button>
+</form>
+{% endblock %}

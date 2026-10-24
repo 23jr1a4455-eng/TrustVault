@@ -32,13 +32,20 @@ def gated_routes():
 
 def test_the_inventory_actually_finds_the_gated_routes():
     # Guards against a vacuous test: if this drops, the loop tests below prove nothing.
-    assert len(gated_routes()) >= 3
+    assert len(gated_routes()) >= 9
+
+
+def real_path(route, letter):
+    grant = letter.grants.first()
+    path = "/" + route.replace("<uuid:doc_id>", str(letter.pk)).replace("<int:grant_id>", str(grant.pk))
+    assert "<" not in path, f"unfilled route parameter in {path}"  # a 404 here would be a false pass
+    return path
 
 
 def test_all_gated_routes_deny_an_ungranted_user_for_every_method(cast, letter, client_for):  # A-07
     client = client_for(cast.sunil)
     for route in gated_routes():
-        path = "/" + route.replace("<uuid:doc_id>", str(letter.pk))
+        path = real_path(route, letter)
         for method in METHODS:
             response = client.generic(method, path)
             assert response.status_code == 404, f"{method} {path} returned {response.status_code}"
@@ -49,7 +56,7 @@ def test_all_gated_routes_deny_an_ungranted_user_for_every_method(cast, letter, 
 
 def test_all_gated_routes_send_anonymous_users_to_login(letter, anon_client):
     for route in gated_routes():
-        path = "/" + route.replace("<uuid:doc_id>", str(letter.pk))
+        path = real_path(route, letter)
         response = anon_client.get(path)
         assert response.status_code == 302, path
         assert "/login/" in response["Location"], path

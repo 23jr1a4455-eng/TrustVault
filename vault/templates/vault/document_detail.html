@@ -8,12 +8,20 @@
 <p>File: {{ stored_file.original_name }} ({{ stored_file.size|filesizeformat }})
   &middot; <a href="{% url 'document_download' doc_id=document.pk %}">Download</a></p>
 {% else %}<p>No file has been uploaded for this document.</p>{% endif %}
+{% if can_share %}<p><a href="{% url 'document_access' doc_id=document.pk %}">Manage who has access</a></p>{% endif %}
+{% if upload_error %}<p class="error">{{ upload_error }}</p>{% endif %}
 {% if errors %}<p class="error">Please check the form and try again.</p>{% endif %}
 {% if can_edit %}
 <form method="post" action="{% url 'document_edit' doc_id=document.pk %}">{% csrf_token %}
   <p><label>Title<br><input name="title" maxlength="200" value="{{ document.title }}" required></label></p>
   <p><label>Category<br><input name="category" maxlength="100" value="{{ document.category }}"></label></p>
   <button type="submit">Save</button>
+</form>
+{% endif %}
+{% if can_edit %}
+<form method="post" action="{% url 'document_replace' doc_id=document.pk %}" enctype="multipart/form-data">{% csrf_token %}
+  <p><label>Replace the file (PDF, DOCX, XLSX or PPTX)<br><input type="file" name="file" accept=".pdf,.docx,.xlsx,.pptx" required></label></p>
+  <button type="submit">Replace file</button>
 </form>
 {% endif %}
 {% if can_delete %}
