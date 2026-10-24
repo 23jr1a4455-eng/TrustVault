@@ -312,5 +312,5 @@ statuses above remain **Local pass; CI pending** rather than **Done**.
 
 - **ZIP archive checks:** ZIP checks use sizes declared in the archive. The server does not unpack the file.
 - **Antivirus:** No antivirus scanning is implemented in this release. This limitation is accepted.
-- **Missing content-length header:** Application upload handlers enforce the per-file limit while parsing; deployment-edge request limits remain defense in depth for total request size.
+- **Missing content-length header:** The upload handler enforces the per-file limit while parsing, but a client can still send a multipart request body larger than 25 MB without a length header. Total request size then relies on host and server limits until Day 6.
 - **Database file storage:** Uploaded files are stored in the database. A database backup or an administrator with sufficient database access can read their contents. Encryption at rest is not implemented in this release; this limitation is accepted.
