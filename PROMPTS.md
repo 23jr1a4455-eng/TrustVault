@@ -13,16 +13,7 @@ Draft from Day 1
 
 ## Reusable instructions and context
 
-### Rules file (CLAUDE.md, loaded by the agent on every task)
-TrustVault rules for the AI agent
-1. Every route touching a document calls authorize(user, doc, action).
-2. Deny by default. Unknown role, action or state means deny.
-3. Never put permissions in tokens; read grants from the DB each request.
-4. Log every allow AND deny to audit_events before replying.
-5. audit_events is append-only. Never write code that edits or deletes it.
-6. Return 404, not 403, for documents the user cannot read.
-7. Never trust uploaded filenames or content types.
-8. Any auth change needs a test that fails when the check is removed.
+Before a TrustVault code task, read [CLAUDE.md](./CLAUDE.md) as the authoritative agent-rules file. For changes to authorization, audit, uploads, or file integrity, use the review prompt and remove-one-check drill below as standing instructions.
 
 ### Spec Kit prompts (as I ran them on 2026-10-19)
 - `/speckit.constitution` Principles for TrustVault, a secure document-sharing platform: (1) a document is reachable only by someone explicitly granted it; the server decides on every request; (2) every allow and deny is audited in an append-only, tamper-evident log; (3) revoking access takes effect on the next request; (4) deny by default, 404 for unreadable documents; (5) never trust uploaded filenames or types; (6) every auth change needs a test that fails when the check is removed; (7) no permissions in tokens.
@@ -198,3 +189,11 @@ For each critical authorization, audit, upload-validation, and integrity check, 
 - **Resolution:** Restored every mutation and reran the complete suite.
 - **Verification:** All ten mutation runs failed as expected; the restored worktree passes `pytest -q` (200 tests).
 - **Status:** Verified locally; CI is pending.
+
+### 2026-10-24: Suggestion authorization test initially treated a stranger as a reader
+
+- **Finding:** `test_only_owner_can_use_suggestion_actions` tries a non-owner who has a grant on a different document, so that case alone does not prove that a reader of this document is denied.
+- **Impact:** If relied on by itself, the test could miss a gate accidentally weakened from owner-only sharing to reader access.
+- **Resolution:** Keep a separate test that grants the user read or edit access to the target document and asserts they cannot suggest, accept, or reject. The remove-one-check drill confirmed weakening `document_suggest` to `READ` fails that test.
+- **Verification:** `test_readers_and_editors_of_document_cannot_use_suggestions` failed for both read and edit variants when the gate was weakened; the restored full suite passed (200 tests).
+- **Status:** Test gap covered locally; CI pending.
