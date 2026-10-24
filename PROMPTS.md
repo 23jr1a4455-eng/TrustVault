@@ -105,35 +105,44 @@ TrustVault rules for the AI agent
 - **Hypothesis:** A request-wide transaction might roll back the denial audit event when the view raises `Http404`.
 - **Evidence:** `ATOMIC_REQUESTS` is false in the current settings. `test_denied_request_leaves_audit_row` uses a transaction-enabled test and confirms the denial row remains after the 404.
 - **Second-model review:** Confirmed this was conditional, not an active defect with current settings. Keep request-wide transactions disabled unless denial-audit durability is revalidated.
-- **Status:** False positive for the current configuration; regression test passes locally. The latest CI run does not include the current worktree revision.
+- **Status:** False positive for the current configuration; `test_denied_request_leaves_audit_row` passes locally, and CI passed for the current revision.
 
 ### 2026-10-24: Multipart parsing limit was a fair design finding
 
 - **Finding:** CSRF middleware can trigger multipart parsing before a view-level upload-size check, so a view check alone does not protect the parser from oversized uploads.
 - **Change:** Added an early declared-body-size middleware check and a streaming upload handler for actual file bytes. The middleware preserves uploader/document authorization and records a rejection before returning 413.
 - **Tests:** `test_declared_oversized_multipart_is_rejected_before_csrf_parsing`, `test_upload_handler_stops_oversized_file_during_multipart_parsing`, and oversized replacement tests.
-- **Status:** Tests and full suite pass locally; CI for the current code revision is pending.
+- **Status:** Regression tests and the full suite pass locally; CI passed for commit `519767c`.
 
 
 ## Findings from security drills and review
 
 ### Finding: Upload audit failure can leave a document stored
 
-- **Source:** Drill 6 — `test_no_audit_row_means_no_stored_document`
+- **Source:** Upload transaction regression — `test_no_audit_row_means_no_stored_document`
 - **Evidence:** The audit service raises `RuntimeError`; the required invariant is that document and file rows roll back with the upload transaction.
 - **Impact:** A document may persist without the required audit record.
 - **Resolution:** Document creation, file storage, and audit recording run in one database transaction.
-- **Verification:** `test_no_audit_row_means_no_stored_document` and the full suite pass locally (138 tests); CI for the current revision is pending.
-- **Status:** Fixed locally; CI pending.
+- **Verification:** `test_no_audit_row_means_no_stored_document` and the full suite pass locally (138 tests); CI passed for commit `519767c`.
+- **Status:** Fixed and verified locally and in CI.
 
 ### Finding: File-integrity verification was missing or ineffective
 
-- **Source:** Drill 8 — `test_altered_file_bytes_are_detected`
+- **Source:** Integrity-check regression — `test_altered_file_bytes_are_detected`
 - **Evidence:** The remove-one-check drill exposed that stored file bytes must be checked against their recorded digest before serving.
 - **Impact:** Modified file content could be served without detection.
 - **Resolution:** Verify the SHA-256 digest on every download, audit integrity failure, and do not return the altered bytes.
-- **Verification:** `test_altered_file_bytes_are_detected`, valid download coverage, and the full suite pass locally (138 tests); CI for the current revision is pending.
-- **Status:** Fixed locally; CI pending.
+- **Verification:** `test_altered_file_bytes_are_detected`, valid download coverage, and the full suite pass locally (138 tests); CI passed for commit `519767c`.
+- **Status:** Fixed and verified locally and in CI.
+
+### Finding: Restore test could pass because the document was still deleted
+
+- **Source:** Phase 4, check 8 — restore authorization regression.
+- **Initial test flaw:** The first test attempted access while the document remained soft-deleted. It would return 404 because of the deleted state even if a grant had incorrectly survived, so it did not prove that restoring failed to revive access.
+- **Correction:** Delete the document through the owner route, restore it through the owner route, then verify the grantee is still denied and the grant remains revoked. `test_deleting_revokes_every_grant_and_restoring_does_not_bring_them_back` exercises this sequence.
+- **Impact:** A test could appear to verify revocation while only testing the soft-delete gate.
+- **Verification:** The corrected test and full suite pass locally (138 tests); CI passed for commit `519767c`.
+- **Status:** Test weakness corrected; the grant-revocation invariant is verified locally and in CI.
 
 ### Finding: Download route and view parameter mismatch
 
@@ -141,14 +150,14 @@ TrustVault rules for the AI agent
 - **Evidence:** `document_download()` raised `TypeError: unexpected keyword argument 'doc_id'`; nine download tests failed alongside the route-marker test.
 - **Impact:** The download endpoint failed, preventing its expected authorization and integrity behavior from being exercised.
 - **Resolution:** Align the URL parameter and view signature, and ensure the route has the required protection marker.
-- **Verification:** Download and route tests pass in the local full suite (138 tests); CI for the current revision is pending.
-- **Status:** Fixed locally; CI pending.
+- **Verification:** Download and route tests pass in the local full suite (138 tests); CI passed for commit `519767c`.
+- **Status:** Fixed and verified locally and in CI.
 
 ### Finding: Authorization and upload review found real gaps
 
 - **Source:** Remove-one-check drill and follow-up code review.
 - **Confirmed issues:** An expired unrevoked grant could block re-sharing/revocation; an invalid grant level could make a document appear in search; audit queryset protections could be bypassed through bulk operations or the base manager; stale edit/replacement writes could race with deletion; malformed PDFs/Office XML and CRC-corrupt archives were not consistently rejected; and multipart parsing could begin before a view-level size check.
 - **Changes:** Grant queries and constraints now reject/handle these cases; audit append-only protections cover the base manager; edit/delete/replace serialize on a document lock and recheck permission; format-aware validation maps corrupt input to audited rejection; request and file-size limits apply before/during parsing.
-- **Verification:** Relevant regression tests and the local full suite pass (138 tests). Latest successful CI is on an earlier commit, so CI for these fixes remains pending.
+- **Verification:** Relevant regression tests and the local full suite pass (138 tests); CI passed for commit `519767c`.
 - **Drill result:** Each of the ten requested “remove one check” mutations made its associated test fail; no all-green mutation remained to prompt another missing test.
-- **Status:** Confirmed findings fixed locally; CI pending.
+- **Status:** Confirmed findings fixed and verified locally and in CI.

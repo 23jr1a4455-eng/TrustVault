@@ -30,23 +30,29 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-02 | A new route that forgets the check | Route-inventory test lists every URL and fails unless it calls the gate or is on a short public allow-list | `test_every_route_is_guarded_or_allowlisted` | Planned D2 |
 
-| A-03 | Viewer calls owner-only actions directly (grant, delete, upload) | Each action needs its own permission, not only a role | `test_viewer_cannot_grant_delete_or_upload` | Planned D2 |
+| A-03 | Viewer calls owner-only actions directly (grant, delete, upload) | Each action needs its own permission, not only a role | `test_only_the_owner_can_manage_access`, `test_viewers_and_admins_cannot_upload`, delete authorization tests | Done |
 
-| A-04 | Owner A reads or edits owner B's document | Ownership checked per document | `test_owner_cannot_access_other_owners_document` | Planned D2 |
+| A-04 | Owner A reads or edits owner B's document | Ownership checked per document | `test_owner_cannot_access_other_owners_document` | Done |
 
 | A-05 | 403 vs 404, or response differences, reveal that a file exists | Same status and body for "absent" and "not yours" | `test_nonexistent_and_unreadable_look_identical` | Planned D2 |
 
 | A-06 | Mass assignment (`role`, `owner`, `is_staff` in a request body) | Explicit form fields; role changed only in the admin user view | `test_profile_update_ignores_role_and_owner` | Planned D2 |
 
-| A-07 | Side doors: preview, thumbnail, versions, export, HEAD, OPTIONS, trailing slash, encoded paths | Every currently implemented document route is gated; preview and export remain planned | `test_all_gated_routes_deny_an_ungranted_user_for_every_method` (implemented routes only) | Local pass for routes so far; preview/export planned; CI pending |
+| A-07 | Side doors: preview, thumbnail, versions, export, HEAD, OPTIONS, trailing slash, encoded paths | Every currently implemented document route is gated; preview and export remain planned | `test_all_gated_routes_deny_an_ungranted_user_for_every_method` (implemented routes only) | Done for implemented routes; preview/export planned |
 
-| A-08 | Search, autocomplete, counts or pagination leak titles or existence | Permission join inside the SQL query, never filtering afterwards | `test_search_returns_only_granted_documents`, `test_counts_do_not_leak` | Planned D4 |
+| A-08 | Search, autocomplete, counts or pagination leak titles or existence | Permission filtering is applied in the query before results and counts are paginated | `test_search_only_finds_what_the_person_may_read`, `test_counts_never_include_hidden_documents`, `test_pagination_stays_inside_permissions` | Done |
 
 | A-09 | Admin grants themselves access, takes ownership or silently makes another admin | Admin has no content access; ownership transfer not built; every admin action audited and flagged | `test_admin_cannot_read_ungranted_document`, `test_admin_actions_are_audited` | Planned D2 / D5 |
 
 | A-10 | Open redirect through `?next=` after login | Only same-host redirect targets are allowed | `test_login_rejects_external_next_url` | Planned D2 |
 
 | A-11 | Public Django admin bypasses the gate and the audit | Admin app removed from `INSTALLED_APPS` and not routed | `test_django_admin_is_not_exposed` | Done |
+
+| G-01 | A guessed grant id revokes someone else's access | The grant must belong to the document being managed | `test_a_grant_id_from_another_document_cannot_be_revoked` | Done |
+
+| G-02 | An editor shares the document | Sharing and access management require owner-level authorization | `test_only_the_owner_can_manage_access` | Done |
+
+| G-03 | A grant is created without its audit row | Grant creation and audit recording are atomic | `test_no_audit_row_means_no_grant` | Done |
 
 
 
@@ -58,17 +64,17 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 |---|---|---|---|---|
 
-| R-01 | Revoked user replays an old request, link or session | Grants read from the database on every request; no permissions in tokens or sessions | `test_revoked_user_gets_404_on_next_request` | Planned D4 |
+| R-01 | Revoked user replays an old request, link or session | Grants read from the database on every request; revocation removes access to documents, downloads, and search immediately | `test_revoking_takes_effect_on_the_next_request`, `test_revoked_user_cannot_download_on_the_next_request`, `test_revoked_expired_and_deleted_documents_leave_search_at_once` | Done |
 
 | R-02 | Disabled user keeps an existing session | `is_active=False` is refused on the next request; sessions deleted on disable | `test_disabled_user_session_stops_working` | Planned D2 |
 
 | R-03 | A download already streaming finishes after revoke | Checked once at the start of the response | none | Accepted (A-1) |
 
-| R-04 | Edit lease or stale save after revoke | Save re-checks the current grant; revoke ends the lease (only if leases are built) | `test_revoked_editor_cannot_save` | Planned D4 |
+| R-04 | Revoked editor saves after access is revoked | Save re-checks the current grant. Edit leases are cut; leases are not built. | `test_a_revoked_editor_cannot_save` | Done for revoked-editor save; leases cut/not built |
 
-| R-05 | Browser or proxy caches a document after logout or revoke | `Cache-Control: no-store` on document and download responses | `test_document_pages_are_not_cacheable` | Local pass; CI pending |
+| R-05 | Browser or proxy caches a document after logout or revoke | `Cache-Control: no-store` on document and download responses | `test_document_pages_are_not_cacheable` | Done |
 
-| R-06 | Restoring a deleted document revives old grants | Soft delete hides it from everyone; restore does not bring grants back | `test_restore_does_not_revive_grants` | Planned D4 |
+| R-06 | Restoring a deleted document revives old grants | Delete revokes grants; restore does not revive them | `test_deleting_revokes_every_grant_and_restoring_does_not_bring_them_back` | Done |
 
 
 
@@ -84,9 +90,9 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | U-02 | The whole hash chain rewritten | Keyed hash (HMAC) with the key kept outside the database; `verify_audit` command; daily copy of the last hash outside the app | `test_tampered_row_breaks_chain_verification` | Planned D5 |
 
-| U-03 | Refused attempts lost when the 404 rolls back the transaction | Request-wide transactions are disabled; the denial audit is committed before the 404 | `test_denied_request_leaves_audit_row` | Local pass; CI pending for current revision |
+| U-03 | Refused attempts lost when the 404 rolls back the transaction | Request-wide transactions are disabled; the denial audit is committed before the 404 | `test_denied_request_leaves_audit_row` | Done |
 
-| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access` (direct download failure test still needed) | Local pass for upload and protected-view failure; direct download test and CI pending |
+| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access` (direct download failure test still needed) | Upload rollback and protected-view failure pass locally/in CI; direct download failure test still needed |
 
 | U-05 | Log injection (newlines or huge strings in titles or usernames) | Structured fields, length caps, escaped on display | `test_audit_fields_are_escaped_and_capped` | Planned D5 |
 
@@ -132,24 +138,24 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 |---|---|---|---|---|
 
-| F-01 | Path traversal or tricks in filenames | Storage key is random and server-made; the original name is metadata only, cleaned | `test_file_names_cannot_escape_or_inject_headers`, `test_uploaded_path_name_is_stored_as_plain_name` | Local pass; CI pending |
+| F-01 | Path traversal or tricks in filenames | Storage key is random and server-made; the original name is metadata only, cleaned | `test_file_names_cannot_escape_or_inject_headers`, `test_uploaded_path_name_is_stored_as_plain_name` | Done |
 
-| F-02 | Fake type (an executable renamed `.pdf`) | Allow-list of PDF, DOCX, XLSX, PPTX plus format-aware content validation | `test_executable_renamed_to_pdf_is_rejected`, `test_structurally_invalid_supported_files_are_rejected` | Local pass; CI pending |
+| F-02 | Fake type (an executable renamed `.pdf`) | Allow-list of PDF, DOCX, XLSX, PPTX plus format-aware content validation | `test_executable_renamed_to_pdf_is_rejected`, `test_structurally_invalid_supported_files_are_rejected` | Done |
 
-| F-03 | Zip bomb inside DOCX, XLSX or PPTX (they are zip files) | Per-file cap plus archive entry and uncompressed-size limits | `test_zip_bomb_is_rejected`, `test_archive_with_too_many_entries_is_rejected`, `test_archive_that_unpacks_too_large_is_rejected` | Local pass; CI pending |
+| F-03 | Zip bomb inside DOCX, XLSX or PPTX (they are zip files) | Per-file cap plus archive entry and uncompressed-size limits | `test_zip_bomb_is_rejected`, `test_archive_with_too_many_entries_is_rejected`, `test_archive_that_unpacks_too_large_is_rejected` | Done |
 
-| F-04 | Active content (HTML, SVG, scripts) served inline | Download only as an attachment, `nosniff`, no inline rendering | `test_download_is_a_safe_attachment` | Local pass; CI pending |
+| F-04 | Active content (HTML, SVG, scripts) served inline | Download only as an attachment, `nosniff`, no inline rendering | `test_download_is_a_safe_attachment` | Done |
 
-| F-05 | Header injection through the filename | Sanitize stored display names before constructing `Content-Disposition` | `test_file_names_cannot_escape_or_inject_headers`, `test_download_is_a_safe_attachment` | Local pass; CI pending |
+| F-05 | Header injection through the filename | Sanitize stored display names before constructing `Content-Disposition` | `test_file_names_cannot_escape_or_inject_headers`, `test_download_is_a_safe_attachment` | Done |
 
-| F-06 | Stored XSS through titles or categories | Template auto-escaping; test with a script payload | `test_titles_are_escaped_in_pages` | Local pass; CI pending |
+| F-06 | Stored XSS through titles or categories | Template auto-escaping; test with a script payload | `test_titles_are_escaped_in_pages` | Done |
 
-| F-07 | Uploaded files lost on redeploy (host filesystem is ephemeral) | Store file bytes in PostgreSQL, not on disk | `test_owner_can_upload_a_pdf` (DB round-trip; no process-restart test yet) | Local implementation check; restart test and CI pending |
+| F-07 | Uploaded files lost on redeploy (host filesystem is ephemeral) | Store file bytes in PostgreSQL, not on disk | `test_owner_can_upload_a_pdf` (DB round-trip; no process-restart test yet) | DB-backed storage passes locally/in CI; process-restart test not present |
 
 | F-08 | Malware inside an allowed file type | No antivirus scanning | none | Accepted (A-4) |
 
-| F-09 | Disk or database exhaustion through uploads | Request and per-file size caps; no per-user quota | `test_oversized_file_is_rejected`, `test_declared_oversized_multipart_is_rejected_before_csrf_parsing`, `test_upload_handler_stops_oversized_file_during_multipart_parsing` | Local pass for size limits; per-user quota Accepted; CI pending |
-| F-10 | Stored file bytes are altered after upload | Store a cryptographic hash and verify the stored bytes before every download; reject and audit integrity failures | `test_altered_file_bytes_are_detected` | Local pass; CI pending |
+| F-09 | Disk or database exhaustion through uploads | Request and per-file size caps; no per-user quota | `test_oversized_file_is_rejected`, `test_declared_oversized_multipart_is_rejected_before_csrf_parsing`, `test_upload_handler_stops_oversized_file_during_multipart_parsing` | Done for size limits; per-user quota Accepted |
+| F-10 | Stored file bytes are altered after upload | Store a cryptographic hash and verify the stored bytes before every download; reject and audit integrity failures | `test_altered_file_bytes_are_detected` | Done |
 
 
 
@@ -229,6 +235,14 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-10 | Admin sees document titles in the activity view | Needed to investigate; titles can be sensitive, so contents are never shown. |
 
+| AR-11 | The grant form reveals whether a username exists inside the organisation | Accepted for this release; unknown and disabled users receive the same generic response. |
+
+| AR-12 | Concurrent edits are last-write-wins | Accepted for this release; edit leases and conflict detection are not built. |
+
+| AR-13 | Deleted documents and their file bytes remain in the trash/database | Accepted for this release; retention cleanup must be performed manually. |
+
+| AR-14 | Replacing a file overwrites its previous bytes | Accepted for this release; the audit log retains hashes, not old file contents. |
+
 
 
 ## Deliberately not built
@@ -294,16 +308,15 @@ Login throttling counters live in one server process. The client address is the 
 ## Security-drill verification
 
 The latest local full-suite run passed (138 tests), and Django checks plus
-migration-state checks passed. These changes are not yet covered by a CI run:
-the latest successful workflow ran against an earlier commit. Accordingly,
-statuses above remain **Local pass; CI pending** rather than **Done**.
+migration-state checks passed. CI also passed on commit `519767c`, including
+the hardening changes; see [the successful workflow run](https://github.com/23jr1a4455-eng/TrustVault/actions/runs/40078084003).
 
 - Drill 6 — `test_no_audit_row_means_no_stored_document` now passes: the failed
   upload transaction leaves no document or file row.
-- Drill 8 — `test_altered_file_bytes_are_detected` now passes: tampered bytes
+- File-integrity regression — `test_altered_file_bytes_are_detected` now passes: tampered bytes
   raise an integrity error and produce an integrity-failure audit event.
 - U-04 still needs a direct download test that makes the download authorization
-  audit write fail; its upload rollback and protected-view failure checks pass.
+  audit write fail; its upload rollback and protected-view failure checks pass locally and in CI.
 - U-08 has no dedicated server-time test yet.
 - F-07 has no cross-process persistence test yet; uploaded bytes are stored in
   PostgreSQL and the upload/download round-trip is covered.
