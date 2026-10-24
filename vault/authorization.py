@@ -6,10 +6,10 @@ from vault.models import Document, Grant
 from vault.services import audit
 
 READ, DOWNLOAD, EDIT, DELETE = "read", "download", "edit", "delete"
-SHARE, RESTORE = "share", "restore"  # owner only: manage who has access / undelete
+SHARE, RESTORE, HISTORY = "share", "restore", "history"  # owner only: who has access, undelete, who touched it
 
 # Level needed for each action. An action that is not listed is denied.
-REQUIRED_LEVEL = {READ: 1, DOWNLOAD: 1, EDIT: 2, DELETE: 3, SHARE: 3, RESTORE: 3}
+REQUIRED_LEVEL = {READ: 1, DOWNLOAD: 1, EDIT: 2, DELETE: 3, SHARE: 3, RESTORE: 3, HISTORY: 3}
 # Plain string keys on purpose; the database stores "read" / "edit".
 GRANT_LEVEL = {"read": 1, "edit": 2}
 OWNER_LEVEL = 3
@@ -80,6 +80,24 @@ def authorize_upload(user, request=None):
     audit.record(
         actor=user,
         action="document.upload",
+        allowed=allowed,
+        request=request,
+        detail={"role": getattr(user, "role", "")},
+    )
+    if not allowed:
+        raise Http404
+
+
+def authorize_admin(user, request=None, what="view"):
+    """Gate for the administrator pages. Looking at the audit trail is itself audited."""
+    allowed = (
+        getattr(user, "is_authenticated", False)
+        and user.is_active
+        and getattr(user, "role", "") == "admin"
+    )
+    audit.record(
+        actor=user,
+        action=f"admin.{what}"[:64],
         allowed=allowed,
         request=request,
         detail={"role": getattr(user, "role", "")},

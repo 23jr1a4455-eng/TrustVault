@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_admin
 
 urlpatterns = [
     path("health/", views.health, name="health"),
@@ -19,4 +19,11 @@ urlpatterns = [
     path("documents/<uuid:doc_id>/access/", views.document_access, name="document_access"),
     path("documents/<uuid:doc_id>/access/grant/", views.document_grant, name="document_grant"),
     path("documents/<uuid:doc_id>/access/<int:grant_id>/revoke/", views.document_revoke, name="document_revoke"),
+    path("documents/<uuid:doc_id>/history/", views_admin.document_history, name="document_history"),
+    path("activity/", views_admin.admin_activity, name="admin_activity"),
+    path("activity/flags/", views_admin.admin_flags, name="admin_flags"),
+    path("activity/verify/", views_admin.admin_verify, name="admin_verify"),
+    path("users/", views_admin.admin_users, name="admin_users"),
+    path("users/<int:user_id>/disable/", views_admin.admin_user_disable, name="admin_user_disable"),
+    path("users/<int:user_id>/enable/", views_admin.admin_user_enable, name="admin_user_enable"),
 ]

@@ -1,0 +1,13 @@
+{% extends "vault/base.html" %}
+{% block title %}Audit check - TrustVault{% endblock %}
+{% block content %}
+<p><a href="{% url 'admin_activity' %}">&larr; Activity</a></p>
+<h1>Audit chain check</h1>
+{% if report.ok %}
+<p>The chain is intact: {{ report.checked }} chained rows checked ({{ report.legacy }} older rows were written before the chain existed).</p>
+{% else %}
+<p class="error"><strong>The audit chain is NOT intact.</strong></p>
+<ul>{% for problem in report.problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+{% endif %}
+<p><small>This check uses the secret key held outside the database. Saved anchors are checked with the command line (verify_audit --anchors).</small></p>
+{% endblock %}

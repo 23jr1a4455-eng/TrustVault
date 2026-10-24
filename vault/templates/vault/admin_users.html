@@ -1,0 +1,27 @@
+{% extends "vault/base.html" %}
+{% block title %}Users - TrustVault{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<p>Switching an account off ends all of its sign-ins at once. Roles and new accounts are managed on the server, not here.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<table>
+  <tr><th>Username</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr>
+  {% for person in people %}
+  <tr>
+    <td>{{ person.get_username }}</td>
+    <td>{{ person.role }}</td>
+    <td>{% if person.is_active %}active{% else %}<strong>disabled</strong>{% endif %}</td>
+    <td>{{ person.last_login|date:"Y-m-d H:i"|default:"never" }}</td>
+    <td>
+      {% if person.role != "admin" %}
+        {% if person.is_active %}
+        <form method="post" action="{% url 'admin_user_disable' user_id=person.pk %}">{% csrf_token %}<button type="submit">Disable</button></form>
+        {% else %}
+        <form method="post" action="{% url 'admin_user_enable' user_id=person.pk %}">{% csrf_token %}<button type="submit">Enable</button></form>
+        {% endif %}
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

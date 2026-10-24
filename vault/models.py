@@ -54,16 +54,12 @@ class DocumentFile(models.Model):
 
 
 class GrantQuerySet(models.QuerySet):
-    def unrevoked(self):
-        """Grants that have not been explicitly revoked, including expired grants."""
-        return self.filter(revoked_at__isnull=True)
-
     def active(self):
-        """Supported grants that are not revoked or expired, judged by the current clock."""
+        """Grants that are not revoked and not expired, judged by the database clock now."""
         now = timezone.now()
-        return self.unrevoked().filter(
-            level__in=[Grant.Level.READ, Grant.Level.EDIT]
-        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        return self.filter(revoked_at__isnull=True).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+        )
 
 
 class Grant(models.Model):
@@ -86,66 +82,43 @@ class Grant(models.Model):
 
     objects = GrantQuerySet.as_manager()
 
-    @property
-    def is_expired(self):
-        return self.expires_at is not None and self.expires_at <= timezone.now()
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["document", "user"],
                 condition=Q(revoked_at__isnull=True),
                 name="one_active_grant_per_user_and_document",
-            ),
-            models.CheckConstraint(
-                condition=Q(revoked_at__isnull=False) | Q(level__in=["read", "edit"]),
-                name="grant_level_valid",
-            ),
+            )
         ]
 
 
-class AuditEventQuerySet(models.QuerySet):
+class AppendOnlyQuerySet(models.QuerySet):
+    """Refuses bulk changes. The database trigger (PostgreSQL) is the second lock."""
+
     def update(self, **kwargs):
-        _ = kwargs
         raise RuntimeError("Audit events are append-only.")
 
     def delete(self):
         raise RuntimeError("Audit events are append-only.")
 
-    def bulk_update(self, objs, fields, batch_size=None):
-        _ = (objs, fields, batch_size)
+    def bulk_update(self, *args, **kwargs):
         raise RuntimeError("Audit events are append-only.")
 
-    def bulk_create(
-        self,
-        objs,
-        batch_size=None,
-        ignore_conflicts=False,
-        update_conflicts=False,
-        update_fields=None,
-        unique_fields=None,
-    ):
-        if update_conflicts:
-            raise RuntimeError("Audit events are append-only.")
-        return super().bulk_create(
-            objs,
-            batch_size=batch_size,
-            ignore_conflicts=ignore_conflicts,
-            update_conflicts=update_conflicts,
-            update_fields=update_fields,
-            unique_fields=unique_fields,
-        )
 
-    def _raw_delete(self, using):
-        _ = using
-        raise RuntimeError("Audit events are append-only.")
+class AuditChainHead(models.Model):
+    """One row: where the audit chain currently ends. Locking it serialises writers,
+    so two requests can never extend the chain from the same point."""
+
+    last_seq = models.BigIntegerField(default=0)
+    last_hash = models.CharField(max_length=64, default="0" * 64)
 
 
 class AuditEvent(models.Model):
     """Append-only record of who tried what, allowed or refused.
 
     No foreign keys on purpose: deleting or renaming a user or document must never
-    change history. Database-level protection and the hash chain come on Day 5.
+    change history. Each row carries the keyed hash (HMAC) of itself and of the row
+    before it, so any edit, deletion or insertion breaks the chain.
     """
 
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -156,11 +129,12 @@ class AuditEvent(models.Model):
     document_id = models.UUIDField(null=True, blank=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     detail = models.JSONField(default=dict, blank=True)
+    # NULL seq = written before the chain existed (Days 2 to 4).
+    seq = models.BigIntegerField(null=True, blank=True, unique=True)
+    prev_hash = models.CharField(max_length=64, blank=True)
+    row_hash = models.CharField(max_length=64, blank=True)
 
-    objects = AuditEventQuerySet.as_manager()
-
-    class Meta:
-        base_manager_name = "objects"
+    objects = AppendOnlyQuerySet.as_manager()
 
     def save(self, *args, **kwargs):
         if self.pk is not None:

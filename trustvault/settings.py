@@ -151,3 +151,19 @@ DATABASES["default"]["ATOMIC_REQUESTS"] = False
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "document_list"
 LOGOUT_REDIRECT_URL = "login"
+
+
+# --- Day 5: tamper-evident audit chain ---
+# Keep this key outside the database and source control.
+AUDIT_HMAC_KEY = os.getenv("AUDIT_HMAC_KEY", "")
+
+if not AUDIT_HMAC_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "Set AUDIT_HMAC_KEY (a long random value kept outside the database)."
+        )
+    AUDIT_HMAC_KEY = "dev-only-audit-key-not-a-secret"
+elif not DEBUG and len(AUDIT_HMAC_KEY) < 32:
+    raise ImproperlyConfigured(
+        "AUDIT_HMAC_KEY must be at least 32 characters when DEBUG is off."
+    )

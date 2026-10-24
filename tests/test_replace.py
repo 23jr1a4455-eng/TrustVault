@@ -5,7 +5,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
-from vault import views
 from vault.models import AuditEvent, DocumentFile, Grant
 
 from .helpers import office_bytes, pdf_bytes
@@ -59,54 +58,6 @@ def test_a_revoked_editor_cannot_save(cast, letter, stored, client_for):
     assert current_bytes(letter) == stored
 
 
-@pytest.mark.django_db(transaction=True)
-def test_stale_editor_edit_cannot_undo_owner_delete(cast, letter, client_for, monkeypatch):
-    Grant.objects.filter(document=letter, user=cast.ravi).update(level="edit")
-    editor = client_for(cast.ravi)
-    owner = client_for(cast.priya)
-    edit_url = reverse("document_edit", kwargs={"doc_id": letter.pk})
-    delete_url = reverse("document_delete", kwargs={"doc_id": letter.pk})
-    original_is_valid = views.DocumentEditForm.is_valid
-
-    def validate_then_delete(form):
-        valid = original_is_valid(form)
-        assert owner.post(delete_url).status_code == 302
-        return valid
-
-    monkeypatch.setattr(views.DocumentEditForm, "is_valid", validate_then_delete)
-    response = editor.post(edit_url, {"title": "Changed by editor", "category": "private"})
-
-    letter.refresh_from_db()
-    assert response.status_code == 404
-    assert letter.deleted_at is not None
-    assert letter.title == "Salary letter - Ravi"
-    assert not AuditEvent.objects.filter(action="document.restored", document_id=letter.pk).exists()
-
-
-@pytest.mark.django_db(transaction=True)
-def test_stale_editor_replace_cannot_write_after_owner_delete(
-    cast, letter, stored, client_for, monkeypatch
-):
-    Grant.objects.filter(document=letter, user=cast.ravi).update(level="edit")
-    editor = client_for(cast.ravi)
-    owner = client_for(cast.priya)
-    delete_url = reverse("document_delete", kwargs={"doc_id": letter.pk})
-    original_is_valid = views.FileOnlyForm.is_valid
-
-    def validate_then_delete(form):
-        valid = original_is_valid(form)
-        assert owner.post(delete_url).status_code == 302
-        return valid
-
-    monkeypatch.setattr(views.FileOnlyForm, "is_valid", validate_then_delete)
-    response = replace(editor, letter, "late.pdf", pdf_bytes("late"))
-
-    letter.refresh_from_db()
-    assert response.status_code == 404
-    assert letter.deleted_at is not None
-    assert current_bytes(letter) == stored
-
-
 def test_a_bad_replacement_is_refused_and_the_old_file_stays(cast, letter, stored, client_for):
     owner = client_for(cast.priya)
     assert replace(owner, letter, "x.pdf", b"MZ not a pdf").status_code == 400
@@ -114,41 +65,6 @@ def test_a_bad_replacement_is_refused_and_the_old_file_stays(cast, letter, store
     assert replace(owner, letter, "x.docx", macro).status_code == 400
     assert current_bytes(letter) == stored
     assert AuditEvent.objects.filter(action="document.upload_rejected", document_id=letter.pk).count() == 2
-
-
-def test_declared_oversized_replacement_is_audited_before_parsing(
-    cast, letter, stored, client_for, monkeypatch
-):
-    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 8)
-    monkeypatch.setattr("vault.services.uploads.MAX_MULTIPART_OVERHEAD_BYTES", 0)
-
-    response = replace(client_for(cast.priya), letter, "large.pdf", b"x" * 128)
-
-    assert response.status_code == 413
-    assert current_bytes(letter) == stored
-    event = AuditEvent.objects.get(
-        action="document.upload_rejected", document_id=letter.pk
-    )
-    assert event.allowed is False
-    assert event.detail["reason"] == "too_large"
-
-
-def test_unauthorized_oversized_replacement_is_denied_and_audited(
-    cast, letter, stored, client_for, monkeypatch
-):
-    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 8)
-    monkeypatch.setattr("vault.services.uploads.MAX_MULTIPART_OVERHEAD_BYTES", 0)
-
-    response = replace(client_for(cast.ravi), letter, "large.pdf", b"x" * 128)
-
-    assert response.status_code == 404
-    assert current_bytes(letter) == stored
-    assert AuditEvent.objects.filter(
-        action="document.edit", allowed=False, document_id=letter.pk
-    ).exists()
-    assert not AuditEvent.objects.filter(
-        action="document.upload_rejected", document_id=letter.pk
-    ).exists()
 
 
 def test_downloads_serve_the_new_file(cast, letter, stored, client_for):

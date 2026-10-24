@@ -21,7 +21,7 @@ def test_every_route_declares_how_it_is_protected():  # A-02
     unmarked = [
         route
         for route, view in all_routes()
-        if getattr(view, "access", None) not in {"public", "authenticated", "gated", "uploader"}
+        if getattr(view, "access", None) not in {"public", "authenticated", "gated", "uploader", "admin"}
     ]
     assert unmarked == [], f"Routes without a protection marker: {unmarked}"
 
@@ -32,7 +32,7 @@ def gated_routes():
 
 def test_the_inventory_actually_finds_the_gated_routes():
     # Guards against a vacuous test: if this drops, the loop tests below prove nothing.
-    assert len(gated_routes()) >= 9
+    assert len(gated_routes()) >= 10
 
 
 def real_path(route, letter):
@@ -73,3 +73,18 @@ def test_upload_routes_refuse_viewers_admins_and_anonymous(cast, client_for, ano
             for method in METHODS:
                 assert client.generic(method, path).status_code == 404, (person.username, method, path)
         assert anon_client.get(path).status_code == 302
+
+
+def test_admin_routes_refuse_everyone_but_administrators(cast, client_for, anon_client):
+    routes = [route for route, view in all_routes() if getattr(view, "access", None) == "admin"]
+    assert len(routes) >= 6, "the admin routes were not found"
+    for route in routes:
+        path = "/" + route.replace("<int:user_id>", str(cast.ravi.pk))
+        assert "<" not in path
+        for person in (cast.priya, cast.ravi, cast.sunil):
+            client = client_for(person)
+            for method in METHODS:
+                assert client.generic(method, path).status_code == 404, (person.username, method, path)
+        assert anon_client.get(path).status_code == 302, path
+    cast.ravi.refresh_from_db()
+    assert cast.ravi.is_active

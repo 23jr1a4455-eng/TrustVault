@@ -7,7 +7,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.http import Http404
 from django.utils.cache import add_never_cache_headers
 
-from vault.authorization import authorize, authorize_upload
+from vault.authorization import authorize, authorize_admin, authorize_upload
 
 
 def public(view):
@@ -42,6 +42,21 @@ def uploader(view):
 
     wrapped = login_required(wrapper)
     wrapped.access = "uploader"
+    return wrapped
+
+
+def admin_only(view):
+    """Administrator pages: users and the audit trail. Admins still get no document content."""
+
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        authorize_admin(request.user, request, view.__name__)
+        response = view(request, *args, **kwargs)
+        add_never_cache_headers(response)
+        return response
+
+    wrapped = login_required(wrapper)
+    wrapped.access = "admin"
     return wrapped
 
 

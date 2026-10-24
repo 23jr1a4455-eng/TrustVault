@@ -8,7 +8,7 @@
 <p>File: {{ stored_file.original_name }} ({{ stored_file.size|filesizeformat }})
   &middot; <a href="{% url 'document_download' doc_id=document.pk %}">Download</a></p>
 {% else %}<p>No file has been uploaded for this document.</p>{% endif %}
-{% if can_share %}<p><a href="{% url 'document_access' doc_id=document.pk %}">Manage who has access</a></p>{% endif %}
+{% if can_share %}<p><a href="{% url 'document_access' doc_id=document.pk %}">Manage who has access</a> &middot; <a href="{% url 'document_history' doc_id=document.pk %}">Who has opened this</a></p>{% endif %}
 {% if upload_error %}<p class="error">{{ upload_error }}</p>{% endif %}
 {% if errors %}<p class="error">Please check the form and try again.</p>{% endif %}
 {% if can_edit %}

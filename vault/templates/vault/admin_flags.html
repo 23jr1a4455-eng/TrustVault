@@ -1,0 +1,15 @@
+{% extends "vault/base.html" %}
+{% block title %}Worth noticing - TrustVault{% endblock %}
+{% block content %}
+<h1>Worth noticing</h1>
+<p>Simple rules over the last day: bursts of refused attempts, many downloads, repeated failed sign-ins, brand-new accounts given access, and files that failed their integrity check.</p>
+{% if flags %}
+<table>
+  <tr><th>What</th><th>Who</th><th>Details</th><th>Last seen (UTC)</th></tr>
+  {% for f in flags %}
+  <tr><td><strong>{{ f.kind }}</strong></td><td>{{ f.who }}</td><td>{{ f.note }}</td><td>{{ f.last|date:"Y-m-d H:i:s" }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p>Nothing unusual in the last day.</p>{% endif %}
+<p><a href="{% url 'admin_activity' %}?group=denied">See all refused attempts</a></p>
+{% endblock %}

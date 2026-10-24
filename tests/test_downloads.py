@@ -68,6 +68,23 @@ def test_downloads_are_audited(cast, letter, stored, client_for):
     assert event.actor_name == "ravi" and event.document_id == letter.pk
 
 
+def test_download_fails_if_audit_write_fails(cast, letter, stored, client_for, monkeypatch):
+    client = client_for(cast.ravi)
+    attempts = []
+
+    def audit_store_down(**kwargs):
+        attempts.append(kwargs)
+        raise RuntimeError("audit store down")
+
+    monkeypatch.setattr("vault.services.audit.record", audit_store_down)
+
+    with pytest.raises(RuntimeError, match="audit store down"):
+        client.get(url(letter))
+
+    assert [attempt["action"] for attempt in attempts] == ["document.download"]
+    assert not AuditEvent.objects.filter(action="document.download", allowed=True).exists()
+
+
 def test_altered_file_bytes_are_detected(cast, letter, stored, client_for):  # F-10
     DocumentFile.objects.filter(document=letter).update(data=b"%PDF-1.4 tampered")
     with pytest.raises(RuntimeError):

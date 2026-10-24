@@ -1,0 +1,39 @@
+{% extends "vault/base.html" %}
+{% block title %}Activity - TrustVault{% endblock %}
+{% block content %}
+<h1>Activity</h1>
+<p>
+  {% for key, group in groups.items %}
+    {% if key == current_group %}<strong>{{ group.0 }}</strong>{% else %}<a href="?group={{ key }}">{{ group.0 }}</a>{% endif %}{% if not forloop.last %} &middot; {% endif %}
+  {% endfor %}
+</p>
+<form method="get">
+  <input type="hidden" name="group" value="{{ current_group }}">
+  <input name="actor" placeholder="Person" value="{{ form.actor.value|default:'' }}" maxlength="150">
+  <input name="document" placeholder="Document id" value="{{ form.document.value|default:'' }}" maxlength="36">
+  <label>From <input type="date" name="date_from" value="{{ form.date_from.value|default:'' }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ form.date_to.value|default:'' }}"></label>
+  <button type="submit">Filter</button>
+</form>
+<form method="post" action="{% url 'admin_verify' %}">{% csrf_token %}<button type="submit">Verify the audit chain</button></form>
+{% if form_invalid %}<p class="error">Please check the filters and try again.</p>{% endif %}
+<table>
+  <tr><th>When (UTC)</th><th>Who</th><th>What</th><th>Result</th><th>Document</th><th>Address</th><th>Details</th></tr>
+  {% for e in page.object_list %}
+  <tr>
+    <td>{{ e.created_at|date:"Y-m-d H:i:s" }}</td>
+    <td>{{ e.actor_name|default:"-" }}</td>
+    <td>{{ e.action }}</td>
+    <td>{% if e.allowed %}allowed{% else %}<strong>refused</strong>{% endif %}</td>
+    <td>{% if e.document_id %}{{ e.document_title|default:"(removed)" }}<br><small>{{ e.document_id }}</small>{% endif %}</td>
+    <td>{{ e.ip_address|default:"-" }}</td>
+    <td><small>{{ e.detail }}</small></td>
+  </tr>
+  {% empty %}<tr><td colspan="7">Nothing matches.</td></tr>{% endfor %}
+</table>
+<p>
+  {% if page.has_previous %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.previous_page_number }}">&larr; Newer</a>{% endif %}
+  Page {{ page.number }} of {{ page.paginator.num_pages }}
+  {% if page.has_next %}<a href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.next_page_number }}">Older &rarr;</a>{% endif %}
+</p>
+{% endblock %}

@@ -16,7 +16,12 @@
 </head>
 <body>
 <nav>
-  <a href="{% url 'home' %}"><strong>TrustVault</strong></a>
+  <span><a href="{% url 'home' %}"><strong>TrustVault</strong></a>
+  {% if user.is_authenticated and user.role == "admin" %}
+    &middot; <a href="{% url 'admin_activity' %}">Activity</a>
+    &middot; <a href="{% url 'admin_flags' %}">Worth noticing</a>
+    &middot; <a href="{% url 'admin_users' %}">Users</a>
+  {% endif %}</span>
   {% if user.is_authenticated %}
   <form method="post" action="{% url 'logout' %}">{% csrf_token %}
     <span>{{ user.get_username }} ({{ user.role }})</span>

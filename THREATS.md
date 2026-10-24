@@ -92,7 +92,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | U-03 | Refused attempts lost when the 404 rolls back the transaction | Request-wide transactions are disabled; the denial audit is committed before the 404 | `test_denied_request_leaves_audit_row` | Done |
 
-| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access` (direct download failure test still needed) | Upload rollback and protected-view failure pass locally/in CI; direct download failure test still needed |
+| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access`, `test_download_fails_if_audit_write_fails` | Local pass; CI pending for current audit-chain changes |
 
 | U-05 | Log injection (newlines or huge strings in titles or usernames) | Structured fields, length caps, escaped on display | `test_audit_fields_are_escaped_and_capped` | Planned D5 |
 
@@ -100,7 +100,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | U-07 | Audit flooding to hide an attack or fill the disk | Rate limits on login and write routes; size caps | `test_login_is_rate_limited` | Planned D2 |
 
-| U-08 | Wrong or forged timestamps | Server UTC timestamp; never accept a client-supplied audit time | No dedicated server-time test found | Open — add test and verify in CI |
+| U-08 | Wrong or forged timestamps | Server UTC timestamp; never accept a client-supplied audit time | `test_audit_uses_server_time` | Local pass; CI pending for current audit-chain changes |
 
 | U-09 | Sensitive data copied into audit or host logs | Log ids and actions, never file contents; titles kept out of server logs | review in `docs/` | Planned D5 |
 
@@ -307,17 +307,18 @@ Login throttling counters live in one server process. The client address is the 
 
 ## Security-drill verification
 
-The latest local full-suite run passed (138 tests), and Django checks plus
-migration-state checks passed. CI also passed on commit `519767c`, including
-the hardening changes; see [the successful workflow run](https://github.com/23jr1a4455-eng/TrustVault/actions/runs/40078084003).
+The latest local full-suite run passed (163 tests) with `pytest -q --create-db`;
+Django checks and migration-state checks also passed. CI passed on commit
+`519767c` for the prior hardening changes; the current audit-chain worktree
+changes still need a CI run.
 
 - Drill 6 — `test_no_audit_row_means_no_stored_document` now passes: the failed
   upload transaction leaves no document or file row.
 - File-integrity regression — `test_altered_file_bytes_are_detected` now passes: tampered bytes
   raise an integrity error and produce an integrity-failure audit event.
-- U-04 still needs a direct download test that makes the download authorization
-  audit write fail; its upload rollback and protected-view failure checks pass locally and in CI.
-- U-08 has no dedicated server-time test yet.
+- U-04 now has a direct download test that makes the download authorization
+  audit write fail; local upload, protected-view and download checks pass.
+- U-08's server-time regression test passes locally.
 - F-07 has no cross-process persistence test yet; uploaded bytes are stored in
   PostgreSQL and the upload/download round-trip is covered.
 
