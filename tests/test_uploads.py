@@ -1,7 +1,12 @@
+import io
 import os
+import struct
+import zipfile
 
 import pytest
+from django.core.files.uploadhandler import FileUploadHandler
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client
 from django.urls import reverse
 
 from vault.models import AuditEvent, Document, DocumentFile
@@ -14,6 +19,18 @@ pytestmark = pytest.mark.django_db
 UPLOAD = "document_upload"
 
 
+class CountingUploadHandler(FileUploadHandler):
+    bytes_seen = 0
+    chunk_size = 4
+
+    def receive_data_chunk(self, raw_data, start):
+        type(self).bytes_seen += len(raw_data)
+        return raw_data
+
+    def file_complete(self, file_size):
+        return None
+
+
 def upload(client, name, data, **fields):
     payload = {"file": SimpleUploadedFile(name, data), **fields}
     return client.post(reverse(UPLOAD), payload)
@@ -21,6 +38,24 @@ def upload(client, name, data, **fields):
 
 def rejected_reasons():
     return list(AuditEvent.objects.filter(action="document.upload_rejected").values_list("detail__reason", flat=True))
+
+
+def _zip_bytes(entries):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        for name, data in entries.items():
+            archive.writestr(name, data)
+    return output.getvalue()
+
+
+def _corrupt_content_types_crc(data):
+    corrupted = bytearray(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        info = archive.getinfo("[Content_Types].xml")
+        name_length, extra_length = struct.unpack_from("<HH", data, info.header_offset + 26)
+        payload_offset = info.header_offset + 30 + name_length + extra_length
+    corrupted[payload_offset] ^= 1
+    return bytes(corrupted)
 
 
 def test_owner_can_upload_a_pdf(cast, client_for):
@@ -70,6 +105,40 @@ def test_zip_that_is_not_an_office_file_is_rejected(cast, client_for):
     assert rejected_reasons() == ["bad_signature"]
 
 
+@pytest.mark.parametrize(
+    ("filename", "data"),
+    [
+        ("broken.pdf", b"%PDF-1.7\nThis is not a valid PDF document."),
+        (
+            "broken.docx",
+            _zip_bytes({
+                "[Content_Types].xml": b"not XML",
+                "word/document.xml": b"not XML",
+            }),
+        ),
+    ],
+)
+def test_structurally_invalid_supported_files_are_rejected(cast, client_for, filename, data):
+    response = upload(client_for(cast.priya), filename, data)
+    assert response.status_code == 400
+    assert Document.objects.count() == 0
+    assert DocumentFile.objects.count() == 0
+    assert rejected_reasons() == ["bad_signature"]
+
+
+def test_corrupt_office_entry_is_audited_as_a_rejection(cast, client_for):
+    data = _zip_bytes({
+        "[Content_Types].xml": b"<Types/>",
+        "word/document.xml": b"<document/>",
+    })
+    data = _corrupt_content_types_crc(data)
+
+    response = upload(client_for(cast.priya), "corrupt.docx", data)
+
+    assert response.status_code == 400
+    assert Document.objects.count() == 0
+    assert rejected_reasons() == ["bad_signature"]
+
 def test_office_file_with_macros_is_rejected(cast, client_for):
     data = office_bytes("docx", extra={"word/vbaProject.bin": b"macro"})
     assert upload(client_for(cast.priya), "x.docx", data).status_code == 400
@@ -109,6 +178,61 @@ def test_archive_with_path_traversal_entry_is_rejected(cast, client_for):
 def test_oversized_file_is_rejected(cast, client_for, monkeypatch):  # F-09
     monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 100)
     assert upload(client_for(cast.priya), "big.pdf", pdf_bytes()).status_code == 413
+    assert rejected_reasons() == ["too_large"]
+
+
+def test_declared_oversized_multipart_is_rejected_before_csrf_parsing(cast, settings, monkeypatch):
+    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 8)
+    monkeypatch.setattr("vault.services.uploads.MAX_MULTIPART_OVERHEAD_BYTES", 0)
+    CountingUploadHandler.bytes_seen = 0
+    settings.FILE_UPLOAD_HANDLERS = [
+        f"{CountingUploadHandler.__module__}.{CountingUploadHandler.__name__}"
+    ]
+
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(cast.priya)
+    response = client.post(
+        reverse(UPLOAD),
+        {"file": SimpleUploadedFile("large.pdf", b"x" * 128)},
+    )
+
+    assert response.status_code == 413
+    assert CountingUploadHandler.bytes_seen == 0
+    assert AuditEvent.objects.filter(action="document.upload", allowed=True).count() == 1
+    assert rejected_reasons() == ["too_large"]
+
+
+def test_unauthorized_oversized_upload_is_denied_and_audited(cast, settings, monkeypatch):
+    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 8)
+    monkeypatch.setattr("vault.services.uploads.MAX_MULTIPART_OVERHEAD_BYTES", 0)
+
+    response = upload(Client(), "large.pdf", b"x" * 128)
+
+    assert response.status_code == 404
+    event = AuditEvent.objects.get(action="document.upload", allowed=False)
+    assert event.detail["role"] == ""
+    assert rejected_reasons() == []
+
+
+def test_upload_handler_stops_oversized_file_during_multipart_parsing(cast, settings, monkeypatch):
+    monkeypatch.setattr("vault.services.uploads.MAX_UPLOAD_BYTES", 8)
+    CountingUploadHandler.bytes_seen = 0
+    settings.FILE_UPLOAD_HANDLERS = [
+        "vault.upload_handlers.UploadSizeLimitHandler",
+        f"{CountingUploadHandler.__module__}.{CountingUploadHandler.__name__}",
+    ]
+
+    client = Client(enforce_csrf_checks=True)
+    client.get(reverse("login"))
+    client.force_login(cast.priya)
+    response = client.post(
+        reverse(UPLOAD),
+        {"file": SimpleUploadedFile("large.pdf", b"x" * 128)},
+    )
+
+    assert response.status_code == 413
+    assert CountingUploadHandler.bytes_seen == 0
+    assert AuditEvent.objects.filter(action="document.upload", allowed=True).count() == 1
     assert rejected_reasons() == ["too_large"]
 
 

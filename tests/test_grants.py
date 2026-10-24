@@ -75,6 +75,51 @@ def test_changing_a_level_keeps_one_grant_and_records_before_and_after(cast, let
     assert event.detail["previous_level"] == "read" and event.detail["level"] == "edit"
 
 
+def test_expired_grant_can_be_reissued(cast, letter):
+    expired = Grant.objects.create(
+        document=letter,
+        user=cast.sunil,
+        level="read",
+        granted_by=cast.priya,
+        expires_at=timezone.now() - timedelta(hours=1),
+    )
+
+    from vault.services.grants import grant_access
+
+    reissued = grant_access(
+        document=letter,
+        by=cast.priya,
+        username=cast.sunil.username,
+        level="edit",
+    )
+
+    assert reissued.pk == expired.pk
+    assert reissued.level == "edit"
+    assert reissued.expires_at is None
+    assert Grant.objects.filter(document=letter, user=cast.sunil).count() == 1
+    assert AuditEvent.objects.filter(action="grant.changed", document_id=letter.pk).exists()
+
+
+def test_expired_grant_can_be_revoked_and_is_listed(cast, letter, client_for):
+    expired = Grant.objects.create(
+        document=letter,
+        user=cast.sunil,
+        level="read",
+        granted_by=cast.priya,
+        expires_at=timezone.now() - timedelta(hours=1),
+    )
+    owner = client_for(cast.priya)
+
+    page = owner.get(url("document_access", letter))
+    assert "sunil" in page.content.decode() and "Expired" in page.content.decode()
+    response = owner.post(url("document_revoke", letter, grant_id=expired.pk))
+
+    assert response.status_code == 302
+    expired.refresh_from_db()
+    assert expired.revoked_at is not None
+    assert AuditEvent.objects.filter(action="grant.revoked", document_id=letter.pk).exists()
+
+
 def test_revoking_takes_effect_on_the_next_request(cast, letter, client_for):  # R-01
     ravi = client_for(cast.ravi)
     assert ravi.get(url("document_detail", letter)).status_code == 200
@@ -104,10 +149,19 @@ def test_an_already_revoked_grant_cannot_be_revoked_again(cast, letter, client_f
 
 
 def test_deleting_revokes_every_grant_and_restoring_does_not_bring_them_back(cast, letter, client_for):  # R-06
+    expired = Grant.objects.create(
+        document=letter,
+        user=cast.sunil,
+        level="read",
+        granted_by=cast.priya,
+        expires_at=timezone.now() - timedelta(hours=1),
+    )
     owner = client_for(cast.priya)
     owner.post(url("document_delete", letter))
     assert Grant.objects.active().filter(document=letter).count() == 0
-    assert AuditEvent.objects.get(action="document.deleted").detail["grants_revoked"] == 1
+    expired.refresh_from_db()
+    assert expired.revoked_at is not None
+    assert AuditEvent.objects.get(action="document.deleted").detail["grants_revoked"] == 2
     assert owner.post(url("document_restore", letter)).status_code == 302
     assert owner.get(url("document_detail", letter)).status_code == 200
     assert client_for(cast.ravi).get(url("document_detail", letter)).status_code == 404

@@ -53,7 +53,7 @@ def grant_access(*, document, by, username, level, expires_on=None, request=None
         raise GrantRefused("owner")
     try:
         with transaction.atomic():
-            existing = Grant.objects.active().filter(document=document, user=grantee).first()
+            existing = Grant.objects.unrevoked().filter(document=document, user=grantee).first()
             if existing is None:
                 grant = Grant.objects.create(
                     document=document, user=grantee, level=level, granted_by=by, expires_at=expires_at
@@ -88,7 +88,7 @@ def revoke_access(*, document, grant_id, by, request=None):
     from someone else's document finds nothing."""
     with transaction.atomic():
         grant = (
-            Grant.objects.active()
+            Grant.objects.unrevoked()
             .select_related("user")
             .filter(pk=grant_id, document=document)
             .first()
@@ -111,4 +111,6 @@ def revoke_access(*, document, grant_id, by, request=None):
 
 def revoke_all(*, document, by):
     """Used when a document is deleted, so restoring it can never bring old access back."""
-    return Grant.objects.active().filter(document=document).update(revoked_at=timezone.now(), revoked_by=by)
+    return Grant.objects.unrevoked().filter(document=document).update(
+        revoked_at=timezone.now(), revoked_by=by
+    )

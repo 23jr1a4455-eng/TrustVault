@@ -1,5 +1,6 @@
 import hashlib
 import io
+from contextlib import contextmanager
 
 from django import forms
 from django.contrib.auth import logout
@@ -11,7 +12,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from vault import throttle
-from vault.authorization import DELETE, DOWNLOAD, EDIT, READ, RESTORE, SHARE, can
+from vault.authorization import DELETE, DOWNLOAD, EDIT, READ, RESTORE, SHARE, authorize, can
 from vault.guards import authenticated, gated, public, uploader
 from vault.models import Document, DocumentFile, Grant
 from vault.selectors import readable_categories, search_documents
@@ -114,6 +115,21 @@ class DocumentEditForm(forms.Form):
     category = forms.CharField(max_length=100, required=False)
 
 
+@contextmanager
+def _locked_document_for_write(request, document, action):
+    while True:
+        denied = False
+        with transaction.atomic():
+            current = Document.objects.select_for_update().get(pk=document.pk)
+            if current.deleted_at is not None or not can(request.user, current, action):
+                denied = True
+            else:
+                yield current
+                return
+        if denied:
+            authorize(request.user, document.pk, action, request=request)
+
+
 @gated(EDIT)
 def document_edit(request, document):
     if request.method != "POST":
@@ -122,35 +138,35 @@ def document_edit(request, document):
     if not form.is_valid():
         context = _detail_context(request, document, errors=form.errors)
         return render(request, "vault/document_detail.html", context, status=400)
-    changed = [f for f in ("title", "category") if getattr(document, f) != form.cleaned_data[f]]
-    with transaction.atomic():
-        document.title = form.cleaned_data["title"]
-        document.category = form.cleaned_data["category"]
-        document.save()
+    with _locked_document_for_write(request, document, EDIT) as current:
+        changed = [f for f in ("title", "category") if getattr(current, f) != form.cleaned_data[f]]
+        current.title = form.cleaned_data["title"]
+        current.category = form.cleaned_data["category"]
+        current.save(update_fields=["title", "category", "updated_at"])
         audit.record(
             actor=request.user,
             action="document.updated",
             allowed=True,
-            document_id=document.pk,
+            document_id=current.pk,
             request=request,
             detail={"fields": changed},  # names only, never the values
         )
-    return redirect("document_detail", doc_id=document.pk)
+    return redirect("document_detail", doc_id=current.pk)
 
 
 @gated(DELETE)
 def document_delete(request, document):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    with transaction.atomic():
-        document.deleted_at = timezone.now()
-        document.save(update_fields=["deleted_at", "updated_at"])
-        revoked = grants.revoke_all(document=document, by=request.user)
+    with _locked_document_for_write(request, document, DELETE) as current:
+        current.deleted_at = timezone.now()
+        current.save(update_fields=["deleted_at", "updated_at"])
+        revoked = grants.revoke_all(document=current, by=request.user)
         audit.record(
             actor=request.user,
             action="document.deleted",
             allowed=True,
-            document_id=document.pk,
+            document_id=current.pk,
             request=request,
             detail={"grants_revoked": revoked},
         )
@@ -216,11 +232,22 @@ def document_upload(request):
         return _upload_page(request, UploadForm())
     if request.method != "POST":
         return HttpResponseNotAllowed(["GET", "POST"])
-    if _declared_length(request) > uploads.MAX_UPLOAD_BYTES + 1_000_000:
+    if _declared_length(request) > uploads.MAX_UPLOAD_BYTES + uploads.MAX_MULTIPART_OVERHEAD_BYTES:
         audit.record(actor=request.user, action="document.upload_rejected", allowed=False,
                      request=request, detail={"reason": "too_large"})
+        request._upload_rejection_logged = True
         return _upload_page(request, UploadForm(), uploads.MESSAGES["too_large"], status=413)
     form = UploadForm(request.POST, request.FILES)
+    if getattr(request, "upload_too_large", False):
+        audit.record(
+            actor=request.user,
+            action="document.upload_rejected",
+            allowed=False,
+            request=request,
+            detail={"reason": "too_large"},
+        )
+        request._upload_rejection_logged = True
+        return _upload_page(request, form, uploads.MESSAGES["too_large"], status=413)
     if not form.is_valid():
         return _upload_page(request, form, "Please choose a file.", status=400)
     try:
@@ -269,7 +296,9 @@ def document_replace(request, document):
         return HttpResponseNotAllowed(["POST"])
     form = FileOnlyForm(request.POST, request.FILES)
     problem = None
-    if not form.is_valid():
+    if getattr(request, "upload_too_large", False):
+        problem = uploads.UploadRejected("too_large")
+    elif not form.is_valid():
         problem = uploads.UploadRejected("empty")
     else:
         try:
@@ -279,27 +308,30 @@ def document_replace(request, document):
     if problem is not None:
         audit.record(actor=request.user, action="document.upload_rejected", allowed=False,
                      document_id=document.pk, request=request, detail={"reason": problem.code})
+        if problem.code == "too_large":
+            request._upload_rejection_logged = True
         context = _detail_context(request, document, upload_error=problem.message)
-        return render(request, "vault/document_detail.html", context, status=400)
-    with transaction.atomic():
-        stored = DocumentFile.objects.select_for_update().filter(document=document).first()
+        status = 413 if problem.code == "too_large" else 400
+        return render(request, "vault/document_detail.html", context, status=status)
+    with _locked_document_for_write(request, document, EDIT) as current:
+        stored = DocumentFile.objects.select_for_update().filter(document=current).first()
         old_hash = stored.sha256 if stored else None
         if stored is None:
-            stored = DocumentFile(document=document, uploaded_by=request.user)
+            stored = DocumentFile(document=current, uploaded_by=request.user)
         stored.original_name, stored.content_type = info.safe_name, info.content_type
         stored.size, stored.sha256, stored.data = info.size, info.sha256, data
         stored.uploaded_by = request.user
         stored.save()
-        document.save(update_fields=["updated_at"])
+        current.save(update_fields=["updated_at"])
         audit.record(
             actor=request.user,
             action="document.file_replaced",
             allowed=True,
-            document_id=document.pk,
+            document_id=current.pk,
             request=request,
             detail={"old_sha256": old_hash, "new_sha256": info.sha256, "size": info.size},
         )
-    return redirect("document_detail", doc_id=document.pk)
+    return redirect("document_detail", doc_id=current.pk)
 
 
 @gated(RESTORE)
@@ -329,8 +361,13 @@ class GrantForm(forms.Form):
 
 
 def _access_context(document, **extra):
-    active = Grant.objects.active().filter(document=document).select_related("user").order_by("user__username")
-    return {"document": document, "grants": active, **extra}
+    unrevoked = (
+        Grant.objects.unrevoked()
+        .filter(document=document)
+        .select_related("user")
+        .order_by("user__username")
+    )
+    return {"document": document, "grants": unrevoked, **extra}
 
 
 @gated(SHARE)

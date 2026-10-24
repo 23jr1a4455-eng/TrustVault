@@ -122,14 +122,13 @@ Validation: `pytest -q` — 125 passed. `manage.py makemigrations --check
 
 ## Additional review — 2026-10-24
 
-The following findings were validated against the repository after reviewing a
-new report. No implementation changes were made as part of this report-only
-follow-up.
+The following findings were validated against the repository and subsequently
+fixed with regression coverage.
 
 ### F-04: Concurrent stale edit can undo document deletion
 
 **Severity:** Medium
-**Status:** Valid, conditional on a concurrent edit and delete request
+**Status:** Fixed
 **Confidence:** 9/10
 
 The edit view authorizes the request and later saves the fetched document
@@ -145,20 +144,15 @@ document live without the expected restore audit event.
 Relevant code: `vault/guards.py` and `vault/views.py` (document edit, delete,
 and replacement views).
 
-Recommended remediation: Lock and re-read the document inside the write
-transaction, verify it is still active, and re-check the actor's current
-permission before applying edits or replacement. Use a compatible locking
-protocol for deletion.
-
-Recommended regression test: Deterministically interleave an editor request
-that has passed its initial gate with an owner delete, then verify the stale
-request cannot modify or undelete the document.
+Edit, delete, and replacement now use the same document-row locking protocol.
+Writes reload the row and re-check both lifecycle state and current permission
+inside the transaction. Deterministic interleaving tests verify stale edits and
+replacements cannot write after deletion.
 
 ### F-05: Audit immutability can be bypassed through the base manager
 
 **Severity:** Low
-**Status:** Valid ORM-layer integrity weakness; no ordinary remote-user path
-identified
+**Status:** Fixed at the application ORM layer
 **Confidence:** 10/10
 
 The custom append-only queryset is attached to `AuditEvent.objects`, but the
@@ -168,15 +162,14 @@ operations that bypass the guards on the default manager.
 
 Relevant code: `vault/models.py` (`AuditEventQuerySet` and `AuditEvent`).
 
-Recommended remediation: Configure a protected base manager, ensuring it
-remains suitable for Django's base-manager use cases, and add tests that attempt
-bulk update and deletion through `_base_manager`. Database privileges or
-triggers are still required to protect against direct SQL or privileged
-database access.
+`AuditEvent` now uses its append-only manager as its base manager; a migration
+records the model option. Regression tests cover base-manager update and
+deletion attempts. Database privileges or triggers are still required to
+protect against direct SQL or privileged database access.
 
 ### F-06: File inspection accepts structurally malformed supported formats
 
-**Status:** Confirmed format-validation gap; security impact not established
+**Status:** Fixed
 **Confidence:** 10/10
 
 PDF inspection checks a prefix, while Office-document inspection checks ZIP
@@ -184,17 +177,14 @@ metadata and required entry names but does not validate the document XML. The
 review reproduced acceptance of a non-PDF with a `%PDF-` prefix and an Office
 archive whose required XML entry contains non-XML bytes.
 
-Relevant code: `vault/services/uploads.py`.
-
-This establishes malformed-file acceptance, not code execution or an exploit
-against a recipient's viewer. If structural validity is a product requirement,
-use format-aware parsing and add malformed PDF and Office-document rejection
-tests. Passing structural validation must not be treated as a malware scan.
+PDFs are now parsed with `pypdf`, and required Office XML parts are parsed with
+`defusedxml` and checked for expected structure. Regression tests reject
+malformed PDF and Office documents. Structural validation is not a malware
+scan.
 
 ### F-07: Corrupt Office archive data can raise an uncaught parsing error
 
-**Status:** Confirmed error-handling defect; not a demonstrated security
-vulnerability
+**Status:** Fixed
 **Confidence:** 10/10
 
 Office archive entry reads are not fully covered by the `BadZipFile` handler.
@@ -202,31 +192,31 @@ A CRC-corrupt entry can therefore raise an unexpected exception rather than
 the application's controlled upload-rejection error. The upload and
 replacement views handle `UploadRejected`, not that raw archive exception.
 
-Relevant code: `vault/services/uploads.py` and `vault/views.py`.
-
-Recommended remediation: Convert archive-read and decompression failures to
-`UploadRejected` around the complete validation operation. Add a corrupt-entry
-regression test and verify the expected rejection and audit behavior.
+Archive read, decompression, XML, and CRC failures are converted to the
+controlled `UploadRejected` path. A corrupt-entry regression test verifies the
+rejection is audited and no document is stored.
 
 ### H-02: Multipart parsing may precede view-level size checks
 
-**Status:** Conditional deployment concern; impact is resource exhaustion and
-was not established
-**Confidence:** Not fully determined
+**Status:** Fixed in the application
+**Confidence:** 9/10
 
-The configured CSRF middleware can access multipart request data before
-view-level upload-size checks. No explicit request-body limit was found in the
-repository, but upstream proxy/server limits were not available for
-verification.
-
-Recommended action: Confirm and enforce request-body limits at the deployment
-edge and test the deployed upload configuration. No code change is justified
-without confirming the deployment's limits.
+An application middleware rejects declared oversized multipart requests before
+CSRF parsing, after authenticating and authorizing upload or replacement
+requests and recording the decision. An upload handler also limits actual file
+bytes when parsing begins, including requests whose declared body size is
+within the limit. Regression tests verify both paths, audit records, and that
+oversized content is not stored. Deployment-edge limits remain useful as
+defense in depth.
 
 ## Additional review validation limits
 
 F-04 requires an in-flight request racing with document deletion. F-05
 requires access to the application ORM; no route for ordinary users to invoke
 the base-manager operations was identified. F-06 and F-07 concern upload
-validation and error handling, not demonstrated exploitation. H-02 depends on
-deployment configuration unavailable in the repository.
+validation and error handling, not demonstrated exploitation. H-02's fix is
+verified at the Django application layer; deployment proxy behavior was not
+available for verification.
+
+Implementation validation: `pytest -q` — 138 passed; `manage.py check` —
+no issues; `manage.py makemigrations --check --dry-run` — no changes detected.

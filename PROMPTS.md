@@ -99,37 +99,41 @@ TrustVault rules for the AI agent
 
 "@
 
-### 2026-10-19: Audit rollback could erase a refused request (audit integrity)
+### 2026-10-19: Audit rollback concern was a false positive under current settings
 
-- **Status:** Local test previously reported passing; CI status not yet confirmed.
 - **Asked:** Review the transaction boundary between authorization denial, audit recording, and the resulting 404.
-- **Problem identified:** If a denial audit event is written inside a transaction that is rolled back when the request raises `Http404`, the refused attempt may disappear from the audit trail.
-- **Test:** `test_denied_request_leaves_audit_row`.
-- **Drill E result:** Pending confirmation. Record the exact steps performed, the observed HTTP response, and whether the denial audit event remained persisted after the response.
-- **Second-model review:** Pending confirmation. Record the second model’s actual finding and whether it was independently verified against the code and test results.
-- **CI:** Pending confirmation.
-- **Commit:** https://github.com/23jr1a4455-eng/TrustVault/commit/da2899e2d3504b1a5722cb879496ee381df9c8fc
+- **Hypothesis:** A request-wide transaction might roll back the denial audit event when the view raises `Http404`.
+- **Evidence:** `ATOMIC_REQUESTS` is false in the current settings. `test_denied_request_leaves_audit_row` uses a transaction-enabled test and confirms the denial row remains after the 404.
+- **Second-model review:** Confirmed this was conditional, not an active defect with current settings. Keep request-wide transactions disabled unless denial-audit durability is revalidated.
+- **Status:** False positive for the current configuration; regression test passes locally. The latest CI run does not include the current worktree revision.
+
+### 2026-10-24: Multipart parsing limit was a fair design finding
+
+- **Finding:** CSRF middleware can trigger multipart parsing before a view-level upload-size check, so a view check alone does not protect the parser from oversized uploads.
+- **Change:** Added an early declared-body-size middleware check and a streaming upload handler for actual file bytes. The middleware preserves uploader/document authorization and records a rejection before returning 413.
+- **Tests:** `test_declared_oversized_multipart_is_rejected_before_csrf_parsing`, `test_upload_handler_stops_oversized_file_during_multipart_parsing`, and oversized replacement tests.
+- **Status:** Tests and full suite pass locally; CI for the current code revision is pending.
 
 
-## Findings from security drills
+## Findings from security drills and review
 
 ### Finding: Upload audit failure can leave a document stored
 
 - **Source:** Drill 6 — `test_no_audit_row_means_no_stored_document`
-- **Evidence:** The audit service raises `RuntimeError`, but the test finds that one document remains in the database.
+- **Evidence:** The audit service raises `RuntimeError`; the required invariant is that document and file rows roll back with the upload transaction.
 - **Impact:** A document may persist without the required audit record.
-- **Resolution:** Ensure document creation, file storage, and audit recording have appropriate transactional failure handling.
-- **Verification:** Rerun the regression test and the complete test suite.
-- **Status:** Open until verified.
+- **Resolution:** Document creation, file storage, and audit recording run in one database transaction.
+- **Verification:** `test_no_audit_row_means_no_stored_document` and the full suite pass locally (138 tests); CI for the current revision is pending.
+- **Status:** Fixed locally; CI pending.
 
 ### Finding: File-integrity verification was missing or ineffective
 
 - **Source:** Drill 8 — `test_altered_file_bytes_are_detected`
-- **Evidence:** Altering the stored bytes did not raise the expected `RuntimeError`.
+- **Evidence:** The remove-one-check drill exposed that stored file bytes must be checked against their recorded digest before serving.
 - **Impact:** Modified file content could be served without detection.
-- **Resolution:** Store a cryptographic hash and verify the bytes on every download.
-- **Verification:** Confirm that the altered-bytes test passes and valid downloads still work.
-- **Status:** Open until verified.
+- **Resolution:** Verify the SHA-256 digest on every download, audit integrity failure, and do not return the altered bytes.
+- **Verification:** `test_altered_file_bytes_are_detected`, valid download coverage, and the full suite pass locally (138 tests); CI for the current revision is pending.
+- **Status:** Fixed locally; CI pending.
 
 ### Finding: Download route and view parameter mismatch
 
@@ -137,14 +141,14 @@ TrustVault rules for the AI agent
 - **Evidence:** `document_download()` raised `TypeError: unexpected keyword argument 'doc_id'`; nine download tests failed alongside the route-marker test.
 - **Impact:** The download endpoint failed, preventing its expected authorization and integrity behavior from being exercised.
 - **Resolution:** Align the URL parameter and view signature, and ensure the route has the required protection marker.
-- **Verification:** Run the complete download test module and route tests.
-- **Status:** Recheck against the current code.
+- **Verification:** Download and route tests pass in the local full suite (138 tests); CI for the current revision is pending.
+- **Status:** Fixed locally; CI pending.
 
-### Finding: Authentication test expectations differ from observed behavior
+### Finding: Authorization and upload review found real gaps
 
-- **Source:** Latest recorded test run
-- **Evidence:** Four tests expected HTTP 302 but received HTTP 404 for disabled or anonymous users.
-- **Impact:** The authentication and authorization contract is not consistently verified by the test suite.
-- **Resolution:** Determine the intended response for each case, preserve document-existence privacy, and update the guard or tests accordingly.
-- **Verification:** Rerun the affected tests and the full suite.
-- **Status:** Open pending investigation.
+- **Source:** Remove-one-check drill and follow-up code review.
+- **Confirmed issues:** An expired unrevoked grant could block re-sharing/revocation; an invalid grant level could make a document appear in search; audit queryset protections could be bypassed through bulk operations or the base manager; stale edit/replacement writes could race with deletion; malformed PDFs/Office XML and CRC-corrupt archives were not consistently rejected; and multipart parsing could begin before a view-level size check.
+- **Changes:** Grant queries and constraints now reject/handle these cases; audit append-only protections cover the base manager; edit/delete/replace serialize on a document lock and recheck permission; format-aware validation maps corrupt input to audited rejection; request and file-size limits apply before/during parsing.
+- **Verification:** Relevant regression tests and the local full suite pass (138 tests). Latest successful CI is on an earlier commit, so CI for these fixes remains pending.
+- **Drill result:** Each of the ten requested “remove one check” mutations made its associated test fail; no all-green mutation remained to prompt another missing test.
+- **Status:** Confirmed findings fixed locally; CI pending.

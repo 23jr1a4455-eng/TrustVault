@@ -1,10 +1,12 @@
 from datetime import timedelta
 
 import pytest
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
 
 from vault.models import Document, DocumentFile, Grant
+from vault.selectors import search_documents
 
 pytestmark = pytest.mark.django_db
 
@@ -41,6 +43,19 @@ def test_search_only_finds_what_the_person_may_read(cast, library, client_for): 
     assert titles_on(search(ravi, q="secret")) == []
     assert titles_on(search(ravi, owner="anita")) == []
     assert titles_on(search(ravi, category="Strategy")) == []
+
+
+def test_invalid_grant_level_does_not_make_document_searchable(cast, library):
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Grant.objects.create(
+                document=library.offer,
+                user=cast.ravi,
+                level="root",
+                granted_by=cast.priya,
+            )
+
+    assert not search_documents(cast.ravi).filter(pk=library.offer.pk).exists()
 
 
 def test_counts_never_include_hidden_documents(cast, library, client_for):

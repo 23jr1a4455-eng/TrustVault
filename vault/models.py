@@ -54,12 +54,16 @@ class DocumentFile(models.Model):
 
 
 class GrantQuerySet(models.QuerySet):
+    def unrevoked(self):
+        """Grants that have not been explicitly revoked, including expired grants."""
+        return self.filter(revoked_at__isnull=True)
+
     def active(self):
-        """Grants that are not revoked and not expired, judged by the database clock now."""
+        """Supported grants that are not revoked or expired, judged by the current clock."""
         now = timezone.now()
-        return self.filter(revoked_at__isnull=True).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
-        )
+        return self.unrevoked().filter(
+            level__in=[Grant.Level.READ, Grant.Level.EDIT]
+        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
 
 
 class Grant(models.Model):
@@ -82,14 +86,59 @@ class Grant(models.Model):
 
     objects = GrantQuerySet.as_manager()
 
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and self.expires_at <= timezone.now()
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["document", "user"],
                 condition=Q(revoked_at__isnull=True),
                 name="one_active_grant_per_user_and_document",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(revoked_at__isnull=False) | Q(level__in=["read", "edit"]),
+                name="grant_level_valid",
+            ),
         ]
+
+
+class AuditEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        _ = kwargs
+        raise RuntimeError("Audit events are append-only.")
+
+    def delete(self):
+        raise RuntimeError("Audit events are append-only.")
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        _ = (objs, fields, batch_size)
+        raise RuntimeError("Audit events are append-only.")
+
+    def bulk_create(
+        self,
+        objs,
+        batch_size=None,
+        ignore_conflicts=False,
+        update_conflicts=False,
+        update_fields=None,
+        unique_fields=None,
+    ):
+        if update_conflicts:
+            raise RuntimeError("Audit events are append-only.")
+        return super().bulk_create(
+            objs,
+            batch_size=batch_size,
+            ignore_conflicts=ignore_conflicts,
+            update_conflicts=update_conflicts,
+            update_fields=update_fields,
+            unique_fields=unique_fields,
+        )
+
+    def _raw_delete(self, using):
+        _ = using
+        raise RuntimeError("Audit events are append-only.")
 
 
 class AuditEvent(models.Model):
@@ -107,6 +156,11 @@ class AuditEvent(models.Model):
     document_id = models.UUIDField(null=True, blank=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     detail = models.JSONField(default=dict, blank=True)
+
+    objects = AuditEventQuerySet.as_manager()
+
+    class Meta:
+        base_manager_name = "objects"
 
     def save(self, *args, **kwargs):
         if self.pk is not None:

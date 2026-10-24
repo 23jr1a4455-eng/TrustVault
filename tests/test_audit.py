@@ -57,3 +57,54 @@ def test_audit_events_cannot_be_changed_through_the_model(cast, letter, client_f
         event.save()
     with pytest.raises(RuntimeError):
         event.delete()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("operation", ["update", "delete", "bulk_update", "bulk_upsert"])
+def test_audit_events_cannot_be_changed_through_bulk_queryset_operations(
+    cast, letter, client_for, operation
+):
+    client_for(cast.sunil).get(url("document_detail", letter))
+    event = AuditEvent.objects.filter(allowed=False).first()
+
+    with pytest.raises(RuntimeError, match="append-only"):
+        if operation == "update":
+            AuditEvent.objects.filter(pk=event.pk).update(allowed=True)
+        elif operation == "delete":
+            AuditEvent.objects.filter(pk=event.pk).delete()
+        elif operation == "bulk_update":
+            event.allowed = True
+            AuditEvent.objects.bulk_update([event], ["allowed"])
+        else:
+            event.allowed = True
+            AuditEvent.objects.bulk_create(
+                [event],
+                update_conflicts=True,
+                update_fields=["allowed"],
+                unique_fields=["id"],
+            )
+
+    event.refresh_from_db()
+    assert event.allowed is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("operation", ["update", "delete"])
+def test_audit_base_manager_rejects_mutation_and_deletion(operation):
+    event = AuditEvent.objects.create(
+        action="document.read",
+        allowed=False,
+        detail={"level": 0},
+    )
+    queryset = AuditEvent._base_manager.filter(pk=event.pk)
+
+    with pytest.raises(RuntimeError, match="append-only"):
+        if operation == "update":
+            queryset.update(allowed=True)
+        else:
+            queryset.delete()
+
+    event.refresh_from_db()
+    assert event.allowed is False
+    assert event.detail == {"level": 0}
+    assert AuditEvent.objects.filter(pk=event.pk).exists()

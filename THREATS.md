@@ -2,7 +2,7 @@
 
 
 
-Status at the end of Day 1 (2026-10-19). I update it every day.
+Status updated 2026-10-24. I update it as implementation and verification progress.
 
 Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and my own list.
 
@@ -14,7 +14,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 
 
-**\*\*Status key:\*\*** **\*\*Done\*\*** = built and I can show it. **\*\*Planned Dn\*\*** = designed, to be built on day *\*n\**. **\*\*Accepted\*\*** = I know about it, and the reason is in "Accepted risks" below.
+**\*\*Status key:\*\*** **\*\*Done\*\*** = built and passed locally and in CI. **\*\*Local pass; CI pending\*\*** = verified in the current worktree, but not yet in a CI run for that revision. **\*\*Planned Dn\*\*** = designed, to be built on day *\*n\**. **\*\*Accepted\*\*** = I know about it, and the reason is in "Accepted risks" below.
 
 
 
@@ -38,7 +38,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-06 | Mass assignment (`role`, `owner`, `is_staff` in a request body) | Explicit form fields; role changed only in the admin user view | `test_profile_update_ignores_role_and_owner` | Planned D2 |
 
-| A-07 | Side doors: preview, thumbnail, versions, export, HEAD, OPTIONS, trailing slash, encoded paths | Every one goes through the gate; parametrised test over methods and path variants | `test_all_document_routes_deny_ungranted_user` | Planned D3 to D4 |
+| A-07 | Side doors: preview, thumbnail, versions, export, HEAD, OPTIONS, trailing slash, encoded paths | Every currently implemented document route is gated; preview and export remain planned | `test_all_gated_routes_deny_an_ungranted_user_for_every_method` (implemented routes only) | Local pass for routes so far; preview/export planned; CI pending |
 
 | A-08 | Search, autocomplete, counts or pagination leak titles or existence | Permission join inside the SQL query, never filtering afterwards | `test_search_returns_only_granted_documents`, `test_counts_do_not_leak` | Planned D4 |
 
@@ -66,7 +66,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | R-04 | Edit lease or stale save after revoke | Save re-checks the current grant; revoke ends the lease (only if leases are built) | `test_revoked_editor_cannot_save` | Planned D4 |
 
-| R-05 | Browser or proxy caches a document after logout or revoke | `Cache-Control: no-store` on document and download responses | `test_document_responses_are_not_cacheable` | Planned D3 |
+| R-05 | Browser or proxy caches a document after logout or revoke | `Cache-Control: no-store` on document and download responses | `test_document_pages_are_not_cacheable` | Local pass; CI pending |
 
 | R-06 | Restoring a deleted document revives old grants | Soft delete hides it from everyone; restore does not bring grants back | `test_restore_does_not_revive_grants` | Planned D4 |
 
@@ -84,9 +84,9 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | U-02 | The whole hash chain rewritten | Keyed hash (HMAC) with the key kept outside the database; `verify_audit` command; daily copy of the last hash outside the app | `test_tampered_row_breaks_chain_verification` | Planned D5 |
 
-| U-03 | Refused attempts lost when the 404 rolls back the transaction | Denial row committed on its own before the 404 is returned. **\*\*Suspected from plan review, not yet proven\*\*** | `test_denied_request_leaves_audit_row` | Planned D2 |
+| U-03 | Refused attempts lost when the 404 rolls back the transaction | Request-wide transactions are disabled; the denial audit is committed before the 404 | `test_denied_request_leaves_audit_row` | Local pass; CI pending for current revision |
 
-| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_download_fails_if_audit_write_fails`, `test_no_audit_row_means_no_stored_document` | Open — fix and verify |
+| U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access` (direct download failure test still needed) | Local pass for upload and protected-view failure; direct download test and CI pending |
 
 | U-05 | Log injection (newlines or huge strings in titles or usernames) | Structured fields, length caps, escaped on display | `test_audit_fields_are_escaped_and_capped` | Planned D5 |
 
@@ -94,7 +94,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | U-07 | Audit flooding to hide an attack or fill the disk | Rate limits on login and write routes; size caps | `test_login_is_rate_limited` | Planned D2 |
 
-| U-08 | Wrong or forged timestamps | Server and database UTC time only, never client time | `test_audit_uses_server_time` | Planned D3 |
+| U-08 | Wrong or forged timestamps | Server UTC timestamp; never accept a client-supplied audit time | No dedicated server-time test found | Open — add test and verify in CI |
 
 | U-09 | Sensitive data copied into audit or host logs | Log ids and actions, never file contents; titles kept out of server logs | review in `docs/` | Planned D5 |
 
@@ -132,24 +132,24 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 |---|---|---|---|---|
 
-| F-01 | Path traversal or tricks in filenames | Storage key is random and server-made; the original name is metadata only, cleaned | `test_upload_with_path_traversal_name_is_safe` | Planned D3 |
+| F-01 | Path traversal or tricks in filenames | Storage key is random and server-made; the original name is metadata only, cleaned | `test_file_names_cannot_escape_or_inject_headers`, `test_uploaded_path_name_is_stored_as_plain_name` | Local pass; CI pending |
 
-| F-02 | Fake type (an executable renamed `.pdf`) | Allow-list of PDF, DOCX, XLSX, PPTX plus a check of the real file signature | `test_upload_rejects_wrong_signature` | Planned D3 |
+| F-02 | Fake type (an executable renamed `.pdf`) | Allow-list of PDF, DOCX, XLSX, PPTX plus format-aware content validation | `test_executable_renamed_to_pdf_is_rejected`, `test_structurally_invalid_supported_files_are_rejected` | Local pass; CI pending |
 
-| F-03 | Zip bomb inside DOCX, XLSX or PPTX (they are zip files) | 25 MB cap; limits on entry count, uncompressed size and nesting | `test_upload_rejects_zip_bomb` | Planned D3 |
+| F-03 | Zip bomb inside DOCX, XLSX or PPTX (they are zip files) | Per-file cap plus archive entry and uncompressed-size limits | `test_zip_bomb_is_rejected`, `test_archive_with_too_many_entries_is_rejected`, `test_archive_that_unpacks_too_large_is_rejected` | Local pass; CI pending |
 
-| F-04 | Active content (HTML, SVG, scripts) served inline | Download only as an attachment, `nosniff`, no inline rendering | `test_download_is_attachment_with_nosniff` | Planned D3 |
+| F-04 | Active content (HTML, SVG, scripts) served inline | Download only as an attachment, `nosniff`, no inline rendering | `test_download_is_a_safe_attachment` | Local pass; CI pending |
 
-| F-05 | Header injection through the filename | Safe filename encoding in `Content-Disposition` | `test_filename_header_injection` | Planned D3 |
+| F-05 | Header injection through the filename | Sanitize stored display names before constructing `Content-Disposition` | `test_file_names_cannot_escape_or_inject_headers`, `test_download_is_a_safe_attachment` | Local pass; CI pending |
 
-| F-06 | Stored XSS through titles or categories | Template auto-escaping; test with a script payload | `test_titles_are_escaped_in_pages` | Planned D3 |
+| F-06 | Stored XSS through titles or categories | Template auto-escaping; test with a script payload | `test_titles_are_escaped_in_pages` | Local pass; CI pending |
 
-| F-07 | Uploaded files lost on redeploy (host filesystem is ephemeral) | Store file bytes in PostgreSQL, not on disk. **\*\*Decision to confirm\*\*** | `test_uploaded_file_survives_new_process` | Planned D3 |
+| F-07 | Uploaded files lost on redeploy (host filesystem is ephemeral) | Store file bytes in PostgreSQL, not on disk | `test_owner_can_upload_a_pdf` (DB round-trip; no process-restart test yet) | Local implementation check; restart test and CI pending |
 
 | F-08 | Malware inside an allowed file type | No antivirus scanning | none | Accepted (A-4) |
 
-| F-09 | Disk or database exhaustion through uploads | Size cap per file; no per-user quota yet | `test_upload_rejects_oversized_file` | Planned D3; quota Accepted |
-| F-10 | Stored file bytes are altered after upload | Store a cryptographic hash and verify the stored bytes before every download; reject and audit integrity failures | `test_altered_file_bytes_are_detected` | Open — fix and verify |
+| F-09 | Disk or database exhaustion through uploads | Request and per-file size caps; no per-user quota | `test_oversized_file_is_rejected`, `test_declared_oversized_multipart_is_rejected_before_csrf_parsing`, `test_upload_handler_stops_oversized_file_during_multipart_parsing` | Local pass for size limits; per-user quota Accepted; CI pending |
+| F-10 | Stored file bytes are altered after upload | Store a cryptographic hash and verify the stored bytes before every download; reject and audit integrity failures | `test_altered_file_bytes_are_detected` | Local pass; CI pending |
 
 
 
@@ -283,7 +283,7 @@ curl.exe -I https://trustvault-app-1tp1.onrender.com/admin/
 
 Refused edits by someone who can read the document show “Not found”, not “Forbidden”. It’s one uniform behaviour, and the UI hides buttons the user can’t use.
 
-Audit rows are protected only in the model for now. Queryset updates and deletes still work until the database trigger on Day 5.
+Application ORM protections reject audit-row instance and queryset updates/deletes, including operations through the base manager. Direct privileged SQL still needs database-level privileges or a trigger.
 
 Anonymous requests to document URLs are audited, so someone could flood the log. Rate limiting is on Day 5.
 
@@ -291,18 +291,26 @@ Seed grants aren’t audited. Real grants go through the audited service on Day 
 
 Login throttling counters live in one server process. The client address is the last X-Forwarded-For entry, which is the one your host’s proxy adds.
 
-## Security-drill findings — open
+## Security-drill verification
 
-These findings came from security drills and remain open until the fixes are implemented and verified locally and in CI.
+The latest local full-suite run passed (138 tests), and Django checks plus
+migration-state checks passed. These changes are not yet covered by a CI run:
+the latest successful workflow ran against an earlier commit. Accordingly,
+statuses above remain **Local pass; CI pending** rather than **Done**.
 
-- **Drill 6 — upload audit failure can leave a document stored.** Test: `test_no_audit_row_means_no_stored_document`. The audit service raises `RuntimeError`, but a document remains in the database. Ensure the database row, file storage, and audit write have coordinated failure handling and cleanup. Verify by rerunning the regression test and the full test suite.
-- **Drill 8 — altered file bytes are not detected.** Test: `test_altered_file_bytes_are_detected`. Altering stored bytes did not raise the expected `RuntimeError`. Store a cryptographic hash and verify file bytes on every download. Verify by rerunning the regression test and the full test suite.
-
-Do not change these findings to **Done** until the corresponding tests pass and the implementation has been reviewed.
+- Drill 6 — `test_no_audit_row_means_no_stored_document` now passes: the failed
+  upload transaction leaves no document or file row.
+- Drill 8 — `test_altered_file_bytes_are_detected` now passes: tampered bytes
+  raise an integrity error and produce an integrity-failure audit event.
+- U-04 still needs a direct download test that makes the download authorization
+  audit write fail; its upload rollback and protected-view failure checks pass.
+- U-08 has no dedicated server-time test yet.
+- F-07 has no cross-process persistence test yet; uploaded bytes are stored in
+  PostgreSQL and the upload/download round-trip is covered.
 
 ## Known Limitations
 
 - **ZIP archive checks:** ZIP checks use sizes declared in the archive. The server does not unpack the file.
 - **Antivirus:** No antivirus scanning is implemented in this release. This limitation is accepted.
-- **Missing content-length header:** A client that omits the length header could send a request body larger than 25 MB. Until Day 6, protection depends on the host and server request-size limits.
+- **Missing content-length header:** Application upload handlers enforce the per-file limit while parsing; deployment-edge request limits remain defense in depth for total request size.
 - **Database file storage:** Uploaded files are stored in the database. A database backup or an administrator with sufficient database access can read their contents. Encryption at rest is not implemented in this release; this limitation is accepted.
