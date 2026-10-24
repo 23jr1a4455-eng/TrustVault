@@ -36,6 +36,25 @@ def test_non_admins_are_refused_and_recorded(cast, client_for):
     assert AuditEvent.objects.filter(action="admin.admin_activity", allowed=False).count() == 2
 
 
+@pytest.mark.parametrize(
+    ("route_name", "action"),
+    [
+        ("admin_activity", "admin.admin_activity"),
+        ("document_upload", "document.upload"),
+    ],
+)
+def test_anonymous_admin_and_upload_denials_are_recorded(anon_client, route_name, action):
+    response = anon_client.get(reverse(route_name))
+
+    assert response.status_code == 302
+    assert response["Location"].startswith("/login/?next=")
+    assert AuditEvent.objects.filter(
+        action=action,
+        allowed=False,
+        actor_id__isnull=True,
+    ).exists()
+
+
 def test_groups_filter_the_log(cast, letter, client_for):
     client_for(cast.sunil).get(reverse("document_detail", kwargs={"doc_id": letter.pk}))
     client_for(cast.priya).post(reverse("document_grant", kwargs={"doc_id": letter.pk}), {"username": "sunil", "level": "read"})
@@ -227,4 +246,10 @@ def test_anchor_and_verify_commands(tmp_path, capsys):
     call_command("verify_audit", anchors=str(log))
     log.write_text(line.replace("hash=", "hash=0")[:-1] + "\n")  # corrupt the saved hash
     with pytest.raises(CommandError):
+        call_command("verify_audit", anchors=str(log))
+    log.write_text("not an anchor\n")
+    with pytest.raises(CommandError, match="Unable to read valid anchors"):
+        call_command("verify_audit", anchors=str(log))
+    log.write_text("")
+    with pytest.raises(CommandError, match="anchor file is empty"):
         call_command("verify_audit", anchors=str(log))

@@ -2,11 +2,16 @@
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from vault.models import AuditChainHead, AuditEvent
 from vault.services.audit import GENESIS, compute_hash, hash_fields_of
 
-ANCHOR_LINE = re.compile(r"seq=(\d+)\s+hash=([0-9a-f]{64})")
+ANCHOR_LINE = re.compile(
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) "
+    r"seq=(?P<seq>\d+) hash=(?P<digest>[0-9a-f]{64}) "
+    r"count=(?P<count>\d+)"
+)
 MAX_PROBLEMS = 20
 
 
@@ -27,7 +32,22 @@ class ChainReport:
 
 def parse_anchors(text):
     """Lines look like: 2026-10-23T09:00:00Z seq=120 hash=<64 hex> count=120"""
-    return [(int(seq), digest) for seq, digest in ANCHOR_LINE.findall(text or "")]
+    anchors = []
+    for line_number, line in enumerate((text or "").splitlines(), start=1):
+        if not line.strip():
+            continue
+        match = ANCHOR_LINE.fullmatch(line)
+        if match is None:
+            raise ValueError(f"Malformed anchor on line {line_number}.")
+        try:
+            datetime.strptime(match["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as error:
+            raise ValueError(f"Malformed timestamp on anchor line {line_number}.") from error
+        seq = int(match["seq"])
+        if int(match["count"]) != seq:
+            raise ValueError(f"Anchor count does not match its sequence on line {line_number}.")
+        anchors.append((seq, match["digest"]))
+    return anchors
 
 
 def verify_chain(anchors=None):
@@ -51,7 +71,13 @@ def verify_chain(anchors=None):
         report.head_seq = event.seq
 
     head = AuditChainHead.objects.filter(pk=1).first()
-    if report.checked and (head is None or head.last_seq != report.head_seq or head.last_hash != previous):
+    if (
+        (report.checked and head is None)
+        or (
+            head is not None
+            and (head.last_seq != report.head_seq or head.last_hash != previous)
+        )
+    ):
         report.fail("The recorded end of the chain does not match the last row (rows removed from the end?).")
 
     for seq, digest in anchors or []:

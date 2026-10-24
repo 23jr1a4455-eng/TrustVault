@@ -12,8 +12,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         anchors = None
         if options["anchors"]:
-            with open(options["anchors"], encoding="utf-8") as handle:
-                anchors = parse_anchors(handle.read())
+            try:
+                with open(options["anchors"], encoding="utf-8") as handle:
+                    anchors = parse_anchors(handle.read())
+            except (OSError, ValueError) as error:
+                raise CommandError(
+                    f"Unable to read valid anchors from {options['anchors']}: {error}"
+                ) from error
+            if not anchors:
+                raise CommandError("The anchor file is empty; refusing unanchored verification.")
         report = verify_chain(anchors)
         self.stdout.write(
             f"checked {report.checked} chained rows, {report.legacy} older rows without a chain, "

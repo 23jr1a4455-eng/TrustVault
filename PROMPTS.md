@@ -161,3 +161,11 @@ TrustVault rules for the AI agent
 - **Verification:** Relevant regression tests and the local full suite pass (138 tests); CI passed for commit `519767c`.
 - **Drill result:** Each of the ten requested “remove one check” mutations made its associated test fail; no all-green mutation remained to prompt another missing test.
 - **Status:** Confirmed findings fixed and verified locally and in CI.
+
+### 2026-10-24: PostgreSQL trigger SQL treated a percent sign as parameter formatting
+
+- **Finding:** The generated append-only trigger SQL included a `%` in its message. PostgreSQL execution through Django's database adapter treated it as parameter-format syntax and failed; SQLite did not expose the problem because it skips the PostgreSQL-only trigger migration.
+- **Impact:** The trigger migration could fail on PostgreSQL even while SQLite-based tests appeared healthy.
+- **Resolution:** Use a fixed append-only error message without a literal percent-format sequence in the SQL.
+- **Verification:** `test_the_database_itself_refuses_updates_and_deletes` exercises the installed trigger on PostgreSQL. The local PostgreSQL suite passes; GitHub CI passed on commit `77a4a44`, before the current uncommitted hardening changes.
+- **Lesson:** Run database-specific migration and trigger tests against the production database engine; SQLite success does not validate PostgreSQL-only SQL.

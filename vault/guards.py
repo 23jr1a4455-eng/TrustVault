@@ -35,14 +35,18 @@ def uploader(view):
 
     @wraps(view)
     def wrapper(request, *args, **kwargs):
-        authorize_upload(request.user, request)
+        try:
+            authorize_upload(request.user, request)
+        except Http404:
+            if not request.user.is_authenticated:
+                return redirect_to_login(request.get_full_path())
+            raise
         response = view(request, *args, **kwargs)
         add_never_cache_headers(response)
         return response
 
-    wrapped = login_required(wrapper)
-    wrapped.access = "uploader"
-    return wrapped
+    wrapper.access = "uploader"
+    return wrapper
 
 
 def admin_only(view):
@@ -50,14 +54,18 @@ def admin_only(view):
 
     @wraps(view)
     def wrapper(request, *args, **kwargs):
-        authorize_admin(request.user, request, view.__name__)
+        try:
+            authorize_admin(request.user, request, view.__name__)
+        except Http404:
+            if not request.user.is_authenticated:
+                return redirect_to_login(request.get_full_path())
+            raise
         response = view(request, *args, **kwargs)
         add_never_cache_headers(response)
         return response
 
-    wrapped = login_required(wrapper)
-    wrapped.access = "admin"
-    return wrapped
+    wrapper.access = "admin"
+    return wrapper
 
 
 def gated(action):

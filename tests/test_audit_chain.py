@@ -65,6 +65,28 @@ def test_an_empty_log_verifies():
     assert verify_chain().ok
 
 
+def test_a_nonzero_head_without_chained_rows_is_detected():
+    AuditChainHead.objects.create(pk=1, last_seq=7, last_hash="a" * 64)
+
+    report = verify_chain()
+
+    assert not report.ok
+    assert any("end of the chain" in problem.lower() for problem in report.problems)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "unrecognized text",
+        "2026-99-23T09:00:00Z seq=1 hash=" + "a" * 64 + " count=1",
+        "2026-10-23T09:00:00Z seq=1 hash=" + "a" * 64 + " count=2",
+    ],
+)
+def test_malformed_anchors_are_rejected(text):
+    with pytest.raises(ValueError, match="anchor|Anchor"):
+        parse_anchors(text)
+
+
 def test_an_edited_row_is_detected():  # U-01, U-02
     add(4)
     raw("UPDATE vault_auditevent SET allowed = %s WHERE seq = 2", [False])
@@ -145,6 +167,30 @@ def test_the_model_refuses_bulk_changes():
         AuditEvent.objects.all().delete()
     with pytest.raises(RuntimeError):
         AuditEvent.objects.bulk_update(list(AuditEvent.objects.all()), ["allowed"])
+
+
+def test_bulk_upsert_cannot_rewrite_an_audit_event():
+    event = add(1)[0]
+    replacement = AuditEvent(
+        seq=event.seq,
+        action=event.action,
+        allowed=not event.allowed,
+        detail={"rewritten": True},
+        prev_hash=event.prev_hash,
+        row_hash=event.row_hash,
+    )
+
+    with pytest.raises(RuntimeError, match="append-only"):
+        AuditEvent.objects.bulk_create(
+            [replacement],
+            update_conflicts=True,
+            update_fields=["allowed", "detail"],
+            unique_fields=["seq"],
+        )
+
+    event.refresh_from_db()
+    assert event.allowed is not replacement.allowed
+    assert event.detail == {"i": 0}
 
 
 def test_the_secret_key_matters(settings):

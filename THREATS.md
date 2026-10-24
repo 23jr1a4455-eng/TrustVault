@@ -42,11 +42,13 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-08 | Search, autocomplete, counts or pagination leak titles or existence | Permission filtering is applied in the query before results and counts are paginated | `test_search_only_finds_what_the_person_may_read`, `test_counts_never_include_hidden_documents`, `test_pagination_stays_inside_permissions` | Done |
 
-| A-09 | Admin grants themselves access, takes ownership or silently makes another admin | Admin has no content access; ownership transfer not built; every admin action audited and flagged | `test_admin_cannot_read_ungranted_document`, `test_admin_actions_are_audited` | Planned D2 / D5 |
+| A-09 | Admin grants themselves access, takes ownership or silently makes another admin | Admin has no document-content access or web role management; administrator page views are audited; ownership transfer is not built | `test_the_admin_still_cannot_open_documents`, `test_the_website_has_no_way_to_change_roles`, `test_administrators_looking_at_the_log_are_themselves_recorded` | Local pass; CI pending for current guard changes |
 
 | A-10 | Open redirect through `?next=` after login | Only same-host redirect targets are allowed | `test_login_rejects_external_next_url` | Planned D2 |
 
 | A-11 | Public Django admin bypasses the gate and the audit | Admin app removed from `INSTALLED_APPS` and not routed | `test_django_admin_is_not_exposed` | Done |
+
+| A-12 | Disabling a user leaves an existing session usable | Disabling a non-admin user ends their active sessions immediately | `test_disabling_a_user_ends_every_session_at_once` | Done |
 
 | G-01 | A guessed grant id revokes someone else's access | The grant must belong to the document being managed | `test_a_grant_id_from_another_document_cannot_be_revoked` | Done |
 
@@ -86,21 +88,25 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 |---|---|---|---|---|
 
-| U-01 | Audit rows edited or deleted (app bug, SQL injection, insider) | Insert-only database role if the host allows it; trigger rejecting UPDATE and DELETE | `test_audit_update_and_delete_fail` | Planned D5 |
+| U-01 | Audit rows edited or deleted (app bug, SQL injection, insider) | ORM protections reject changes and the PostgreSQL trigger rejects UPDATE and DELETE | `test_the_model_refuses_bulk_changes`, `test_the_database_itself_refuses_updates_and_deletes` | Local pass; CI pending for current ORM hardening |
 
-| U-02 | The whole hash chain rewritten | Keyed hash (HMAC) with the key kept outside the database; `verify_audit` command; daily copy of the last hash outside the app | `test_tampered_row_breaks_chain_verification` | Planned D5 |
+| U-02 | The whole hash chain rewritten | Keyed HMAC chain, verifier, and saved external anchors detect rewrites covered by an anchor | `test_an_edited_row_is_detected`, `test_an_attacker_with_the_key_is_caught_only_by_the_anchors` | Local pass; CI pending for current verifier changes |
 
 | U-03 | Refused attempts lost when the 404 rolls back the transaction | Request-wide transactions are disabled; the denial audit is committed before the 404 | `test_denied_request_leaves_audit_row` | Done |
 
 | U-04 | Audit write fails but an upload or download still succeeds, or a document persists without its audit row | Fail closed: audit failure must not leave a stored document or return protected content; coordinate database and file-storage rollback/cleanup | `test_no_audit_row_means_no_stored_document`, `test_audit_failure_blocks_access`, `test_download_fails_if_audit_write_fails` | Local pass; CI pending for current audit-chain changes |
 
-| U-05 | Log injection (newlines or huge strings in titles or usernames) | Structured fields, length caps, escaped on display | `test_audit_fields_are_escaped_and_capped` | Planned D5 |
+| U-05 | Log injection (newlines or huge strings in titles or usernames) | Structured fields, control-character cleanup, length caps, and escaped display | `test_log_values_cannot_forge_lines_or_grow_without_limit` | Local pass; CI pending for current audit-chain changes |
 
-| U-06 | Two writers fork the chain | Row lock on the chain head | `test_concurrent_appends_keep_one_chain` | Planned D5 |
+| U-06 | Two writers fork the chain | Row lock on the chain head serializes appends | `test_concurrent_writers_never_fork_the_chain` | Local pass; CI pending for current audit-chain changes |
 
-| U-07 | Audit flooding to hide an attack or fill the disk | Rate limits on login and write routes; size caps | `test_login_is_rate_limited` | Planned D2 |
+| U-07 | Audit flooding to hide an attack or fill the disk | Login throttling returns 429; flags highlight repeated denied URL probes, but anonymous document probes can still append audit rows | `test_login_is_rate_limited`, `test_repeated_refusals_are_flagged_but_a_few_are_not` | Accepted (anonymous document probes can add audit rows) |
 
 | U-08 | Wrong or forged timestamps | Server UTC timestamp; never accept a client-supplied audit time | `test_audit_uses_server_time` | Local pass; CI pending for current audit-chain changes |
+
+| U-10 | Database owner with the audit key rewrites the complete chain | A saved Git anchor detects a rewrite of history covered by that anchor | `test_an_attacker_with_the_key_is_caught_only_by_the_anchors` | Local pass; CI pending for current verifier changes |
+
+| U-11 | Rows written before chain creation are not tamper-evident | Pre-chain rows are counted and reported separately from chained rows | `test_rows_from_before_the_chain_are_counted_not_failed` | Local pass; CI pending for current verifier changes |
 
 | U-09 | Sensitive data copied into audit or host logs | Log ids and actions, never file contents; titles kept out of server logs | review in `docs/` | Planned D5 |
 
@@ -118,7 +124,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | S-02 | User enumeration through login messages or timing | One generic error message | `test_login_error_is_identical` | Planned D2 |
 
-| S-03 | Cookie theft, fixation, long-lived sessions | HttpOnly, Secure, SameSite=Lax cookies; one-hour idle timeout; Django cycles the key on login; logout deletes the session | settings check | Done (flags and timeout); logout test Planned D2 |
+| S-03 | Cookie theft, fixation, long-lived sessions | HttpOnly, Secure, SameSite=Lax cookies; one-hour idle timeout; Django cycles the key on login; logout deletes the session | settings check, `test_logout_ends_the_session` | Done |
 
 | S-04 | CSRF on grant, revoke, delete | `CsrfViewMiddleware` on; token required on POST | `test_post_without_csrf_token_is_rejected` | Done (middleware); test Planned D2 |
 
@@ -217,7 +223,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-1 | A download already streaming may finish after access is revoked | Checking on every chunk adds complexity; the window is one response. Revocation applies to the very next request. |
 
-| A-2 | Someone with the database owner account and the audit key could rewrite the whole chain | Daily external copy of the last hash makes this detectable after the fact; I cannot make it impossible on a managed host. |
+| A-2 | Someone with the database owner account and the audit key could rewrite the whole chain | A saved Git anchor detects changes to history covered by that anchor; it does not prevent tampering or cover changes after the last anchor. I cannot make this impossible on a managed host. |
 
 | A-3 | Free host: database expires after 30 days, has no backups, the service sleeps when idle | Demo environment with fake data. Expiry date is in the README. |
 
@@ -231,7 +237,7 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 
 | A-8 | HSTS is only one hour, no preload | Raise it only after HTTPS has been confirmed everywhere. |
 
-| A-9 | One global audit chain serialises writes | Fine at demo volume. |
+| A-9 | One global audit chain serialises writes | Fine at demo volume; writes wait on the single chain-head lock. |
 
 | A-10 | Admin sees document titles in the activity view | Needed to investigate; titles can be sensitive, so contents are never shown. |
 
@@ -242,6 +248,14 @@ Sources: my Threat Dragon model (`docs/threat-model/`), the Spec Kit plan, and m
 | AR-13 | Deleted documents and their file bytes remain in the trash/database | Accepted for this release; retention cleanup must be performed manually. |
 
 | AR-14 | Replacing a file overwrites its previous bytes | Accepted for this release; the audit log retains hashes, not old file contents. |
+
+| AR-15 | The database owner can drop the append-only trigger; this host has one database account | Accepted operational limit: the trigger protects against ordinary UPDATE/DELETE statements, not the table owner or a disabled/dropped trigger. |
+
+| AR-16 | `AUDIT_HMAC_KEY` is lost | Without the original key, the chain cannot be verified; keep the key in the host's secret settings and a managed password store. |
+
+| AR-17 | The external daily anchor is stale | The anchor only witnesses the chain as of the last successful run of the anchor script. |
+
+| AR-18 | Documents owned by a disabled user remain in the vault | Access is disabled with the account; documents remain stored and cannot currently be reassigned through the website. |
 
 
 
@@ -307,10 +321,10 @@ Login throttling counters live in one server process. The client address is the 
 
 ## Security-drill verification
 
-The latest local full-suite run passed (163 tests) with `pytest -q --create-db`;
-Django checks and migration-state checks also passed. CI passed on commit
-`519767c` for the prior hardening changes; the current audit-chain worktree
-changes still need a CI run.
+The current worktree full suite passed (170 tests) with `pytest -q`. Django
+checks and migration-state checks also passed. GitHub CI passed on commit
+`77a4a44`; the current uncommitted verifier, ORM, and guard hardening changes
+still need a CI run, so related findings remain marked **Local pass; CI pending**.
 
 - Drill 6 — `test_no_audit_row_means_no_stored_document` now passes: the failed
   upload transaction leaves no document or file row.
@@ -318,7 +332,8 @@ changes still need a CI run.
   raise an integrity error and produce an integrity-failure audit event.
 - U-04 now has a direct download test that makes the download authorization
   audit write fail; local upload, protected-view and download checks pass.
-- U-08's server-time regression test passes locally.
+- U-08's server-time regression test passes locally; CI coverage for that test
+  is pending.
 - F-07 has no cross-process persistence test yet; uploaded bytes are stored in
   PostgreSQL and the upload/download round-trip is covered.
 

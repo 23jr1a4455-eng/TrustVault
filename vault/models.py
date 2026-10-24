@@ -104,6 +104,26 @@ class AppendOnlyQuerySet(models.QuerySet):
     def bulk_update(self, *args, **kwargs):
         raise RuntimeError("Audit events are append-only.")
 
+    def bulk_create(
+        self,
+        objs,
+        batch_size=None,
+        ignore_conflicts=False,
+        update_conflicts=False,
+        update_fields=None,
+        unique_fields=None,
+    ):
+        if update_conflicts:
+            raise RuntimeError("Audit events are append-only.")
+        return super().bulk_create(
+            objs,
+            batch_size=batch_size,
+            ignore_conflicts=ignore_conflicts,
+            update_conflicts=update_conflicts,
+            update_fields=update_fields,
+            unique_fields=unique_fields,
+        )
+
 
 class AuditChainHead(models.Model):
     """One row: where the audit chain currently ends. Locking it serialises writers,
