@@ -394,10 +394,6 @@ docs/threat-model/       Threat model diagrams and source data
 requirements.txt         Pinned Python dependencies
 ```
 
-## 17. License
-
-No license file is currently included. Unless a license is added, do not
-assume that the source code is available for redistribution or reuse.
 
 ## Demo Video
 
