@@ -398,3 +398,11 @@ requirements.txt         Pinned Python dependencies
 
 No license file is currently included. Unless a license is added, do not
 assume that the source code is available for redistribution or reuse.
+
+## Demo Video
+
+Watch the TrustVault project demonstration:
+
+[**Watch the TrustVault Demo Video**](https://drive.google.com/file/d/1WgEyeRXehFRi8Eh0stPSnW4lDCni5iYQ/view?usp=sharing)
+
+The demonstration covers the application's main features, document access controls, audit logging, and security-testing process, including known limitations.
