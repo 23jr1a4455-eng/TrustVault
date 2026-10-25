@@ -1,0 +1,61 @@
+Local adversarial HTTP check against an isolated, temporary PostgreSQL database.
+No live service or persistent application database was targeted.
+Temporary demo credentials are not recorded.
+
+Target: http://127.0.0.1:53215   document under attack: 9f0bbcbe-fa27-4d44-9d2a-d2ac0a5fc5a8
+
+== Not signed in ==
+  [PASS] health check answers
+  [PASS] no document or admin page is reachable without signing in
+  [PASS] Django admin is not exposed
+  [PASS] no source, secret or database files are served
+  [PASS] a forged Host header is refused
+  [PASS] login page sends x-content-type-options
+  [PASS] login page sends x-frame-options
+  [PASS] login page sends referrer-policy
+  [PASS] login page sends cross-origin-resource-policy
+  [PASS] login page sends a strict Content-Security-Policy
+  [PASS] login page sends Permissions-Policy
+  [PASS] CSRF cookie is SameSite
+  [PASS] CSRF cookie is Secure
+  [PASS] HSTS is on
+  [PASS] a POST without a CSRF token is refused
+  [PASS] 404 page leaks nothing
+
+== Signed in, but NOT granted (sunil, anita, meena) ==
+  [PASS] sunil: every document route gives the same 404 as a document that does not exist
+  [PASS] sunil: search shows nothing of the document
+  [PASS] sunil: search counts do not include hidden documents
+  [PASS] anita: every document route gives the same 404 as a document that does not exist
+  [PASS] anita: search shows nothing of the document
+  [PASS] anita: search counts do not include hidden documents
+  [PASS] meena: every document route gives the same 404 as a document that does not exist
+  [PASS] meena: search shows nothing of the document
+  [PASS] meena: search counts do not include hidden documents
+  [PASS] sunil: path tricks (slashes, case, dots, encodings) never reach the file
+  [PASS] sunil: spoofed headers do not open the download
+  [PASS] sunil: administrator pages are refused (with a valid CSRF token)
+  [PASS] anita (another owner): cannot see the history of Priya's document
+
+== Allowed people (ravi has read access, priya owns, meena is admin) ==
+  [PASS] ravi can open the document he was granted
+  [PASS] document pages are never cached
+  [PASS] ravi can download it
+  [PASS] the download is an attachment
+  [PASS] the download is sandboxed
+  [PASS] the download is not sniffable and not cached
+  [PASS] ravi (read only) cannot edit, delete or share it
+  [PASS] priya (owner) can open it
+  [PASS] meena (admin) can read the activity log
+  [PASS] the activity log shows refused attempts
+  [PASS] meena (admin) still cannot open the document
+  [PASS] priya (owner) cannot see admin pages
+
+== Hostile input ==
+  [PASS] extra fields (owner, role) in a form are ignored
+  [PASS] odd search and address input never causes a server error
+  [PASS] a broken upload request gives a clean error, not a crash
+  [PASS] login does not redirect to https://evil.example/
+  [PASS] login does not redirect to //evil.example/
+
+46 passed, 0 FAILED

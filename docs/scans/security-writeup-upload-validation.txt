@@ -1,0 +1,17 @@
+TrustVault upload-validation probe
+Scope: local in-memory call to vault.services.uploads.inspect_upload()
+Storage: no file was uploaded or stored
+
+Case 1:
+  Filename: sample.pdf
+  Input: bytes beginning with "%PDF-" but not a structurally valid PDF
+  Observed: accepted by inspect_upload()
+
+Case 2:
+  Filename: sample.docx
+  Input: ZIP with expected Office entry names but invalid document XML
+  Observed: accepted by inspect_upload()
+
+Conclusion:
+The current checks do not establish that PDF or Office document structures
+are valid. This probe does not test antivirus behavior or prove exploitability.
